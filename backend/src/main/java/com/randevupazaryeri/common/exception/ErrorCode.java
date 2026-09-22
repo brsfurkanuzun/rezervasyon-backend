@@ -1,0 +1,13 @@
+package com.randevupazaryeri.common.exception;
+
+public enum ErrorCode {
+    RESOURCE_NOT_FOUND,
+    BUSINESS_RULE_VIOLATION,
+    UNAUTHORIZED,
+    FORBIDDEN,
+    VALIDATION_ERROR,
+    APPOINTMENT_SLOT_UNAVAILABLE,
+    INVALID_APPOINTMENT,
+    CONFLICT,
+    INTERNAL_ERROR
+}

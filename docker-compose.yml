@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: randevu-postgres
+    environment:
+      POSTGRES_DB: randevu
+      POSTGRES_USER: randevu
+      POSTGRES_PASSWORD: randevu
+    ports:
+      - "5433:5432"
+    volumes:
+      - randevu_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U randevu -d randevu"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: randevu-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  randevu_pg_data:
