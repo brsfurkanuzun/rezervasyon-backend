@@ -8,7 +8,9 @@ import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -36,6 +38,21 @@ public class Employee {
     private String bio;
     @Column(name = "photo_url")
     private String photoUrl;
+
+    @ElementCollection
+    @CollectionTable(name = "employee_portfolio_urls", joinColumns = @JoinColumn(name = "employee_id"))
+    @Column(name = "url", nullable = false)
+    @OrderColumn(name = "sort_order")
+    @Builder.Default
+    private List<String> portfolioUrls = new ArrayList<>();
+
+    @ElementCollection
+    @CollectionTable(name = "employee_languages", joinColumns = @JoinColumn(name = "employee_id"))
+    @Column(name = "language", nullable = false)
+    @OrderColumn(name = "sort_order")
+    @Builder.Default
+    private List<String> languages = new ArrayList<>();
+
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 

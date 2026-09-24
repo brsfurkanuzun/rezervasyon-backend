@@ -33,4 +33,5 @@ public class BusinessDetailResponse {
     private List<ServiceResponse> services;
     private List<EmployeeResponse> employees;
     private List<ReviewResponse> recentReviews;
+    private List<OpeningHourResponse> openingHours;
 }

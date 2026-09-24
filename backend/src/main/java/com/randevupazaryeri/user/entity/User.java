@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -33,6 +34,15 @@ public class User {
 
     @Column(length = 32)
     private String phone;
+
+    @Column(name = "photo_url", columnDefinition = "TEXT")
+    private String photoUrl;
+
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
+
+    @Column(length = 32)
+    private String gender;
 
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;

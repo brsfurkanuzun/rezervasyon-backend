@@ -20,6 +20,7 @@ public final class BusinessMapper {
         return BusinessSummaryResponse.builder()
                 .id(b.getId()).name(b.getName()).slug(b.getSlug())
                 .city(b.getCity()).district(b.getDistrict())
+                .latitude(b.getLatitude()).longitude(b.getLongitude())
                 .logoUrl(b.getLogoUrl()).coverImageUrl(b.getCoverImageUrl())
                 .status(b.getStatus())
                 .averageRating(avg).reviewCount(count).startingPrice(startingPrice)

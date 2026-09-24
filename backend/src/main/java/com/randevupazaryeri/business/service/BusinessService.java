@@ -13,7 +13,9 @@ import com.randevupazaryeri.common.exception.ResourceNotFoundException;
 import com.randevupazaryeri.common.security.SecurityUtils;
 import com.randevupazaryeri.employee.dto.EmployeeResponse;
 import com.randevupazaryeri.employee.mapper.EmployeeMapper;
+import com.randevupazaryeri.employee.entity.WorkingHour;
 import com.randevupazaryeri.employee.repository.EmployeeRepository;
+import com.randevupazaryeri.employee.repository.WorkingHourRepository;
 import com.randevupazaryeri.review.dto.ReviewResponse;
 import com.randevupazaryeri.review.mapper.ReviewMapper;
 import com.randevupazaryeri.review.repository.ReviewRepository;
@@ -46,6 +48,7 @@ public class BusinessService {
     private final ServiceOfferRepository serviceOfferRepository;
     private final EmployeeRepository employeeRepository;
     private final ReviewRepository reviewRepository;
+    private final WorkingHourRepository workingHourRepository;
 
     @Transactional
     public BusinessSummaryResponse create(CreateBusinessRequest request) {
@@ -109,9 +112,19 @@ public class BusinessService {
         List<ServiceResponse> services = serviceOfferRepository.findByBusinessIdAndIsActiveTrue(business.getId())
                 .stream().map(ServiceMapper::toResponse).toList();
         List<EmployeeResponse> employees = employeeRepository.findByBusinessIdAndIsActiveTrue(business.getId())
-                .stream().map(EmployeeMapper::toResponse).toList();
-        List<ReviewResponse> reviews = reviewRepository.findTop5ByBusinessIdOrderByCreatedAtDesc(business.getId())
+                .stream()
+                .map(e -> {
+                    EmployeeResponse er = EmployeeMapper.toResponse(e);
+                    Double empAvg = reviewRepository.averageRatingByEmployeeId(e.getId());
+                    long empCount = reviewRepository.countByEmployeeId(e.getId());
+                    er.setAverageRating(empAvg);
+                    er.setReviewCount(empCount);
+                    return er;
+                })
+                .toList();
+        List<ReviewResponse> reviews = reviewRepository.findTop20ByBusinessIdOrderByCreatedAtDesc(business.getId())
                 .stream().map(ReviewMapper::toResponse).toList();
+        List<OpeningHourResponse> openingHours = openingHours(business.getId());
         return BusinessDetailResponse.builder()
                 .id(business.getId()).name(business.getName()).slug(business.getSlug())
                 .description(business.getDescription()).phone(business.getPhone()).email(business.getEmail())
@@ -123,7 +136,21 @@ public class BusinessService {
                 .averageRating(avg).reviewCount(count)
                 .categories(business.getCategories().stream().map(BusinessMapper::toCategory).toList())
                 .services(services).employees(employees).recentReviews(reviews)
+                .openingHours(openingHours)
                 .build();
+    }
+
+    private List<OpeningHourResponse> openingHours(UUID businessId) {
+        Map<Integer, OpeningHourResponse> byDay = new TreeMap<>();
+        for (WorkingHour wh : workingHourRepository
+                .findByEmployeeBusinessIdAndEmployeeIsActiveTrueAndIsAvailableTrue(businessId)) {
+            byDay.merge(wh.getDayOfWeek(),
+                    new OpeningHourResponse(wh.getDayOfWeek(), wh.getStartTime(), wh.getEndTime()),
+                    (a, b) -> new OpeningHourResponse(a.getDayOfWeek(),
+                            a.getOpenTime().isBefore(b.getOpenTime()) ? a.getOpenTime() : b.getOpenTime(),
+                            a.getCloseTime().isAfter(b.getCloseTime()) ? a.getCloseTime() : b.getCloseTime()));
+        }
+        return List.copyOf(byDay.values());
     }
 
     @Transactional(readOnly = true)
@@ -154,6 +181,40 @@ public class BusinessService {
             return cb.and(preds.toArray(new Predicate[0]));
         };
         return businessRepository.findAll(spec, pageable).map(this::toSummary);
+    }
+
+    @Transactional(readOnly = true)
+    public List<BusinessSummaryResponse> nearby(String slug, int limit) {
+        Business origin = businessRepository.findBySlug(slug)
+                .orElseThrow(() -> new ResourceNotFoundException("Business not found"));
+        Comparator<Business> sameArea = Comparator
+                .comparing((Business b) -> !Objects.equals(b.getDistrict(), origin.getDistrict()))
+                .thenComparing(b -> !Objects.equals(b.getCity(), origin.getCity()));
+        boolean originHasCoords = origin.getLatitude() != null && origin.getLongitude() != null;
+        return businessRepository.findByStatusAndIdNot(BusinessStatus.ACTIVE, origin.getId()).stream()
+                .map(b -> Map.entry(b, originHasCoords && b.getLatitude() != null && b.getLongitude() != null
+                        ? distanceKm(origin.getLatitude(), origin.getLongitude(), b.getLatitude(), b.getLongitude())
+                        : Double.MAX_VALUE))
+                .sorted(Map.Entry.<Business, Double>comparingByValue()
+                        .thenComparing(Map.Entry::getKey, sameArea))
+                .limit(Math.max(1, Math.min(limit, 20)))
+                .map(entry -> {
+                    BusinessSummaryResponse summary = toSummary(entry.getKey());
+                    if (entry.getValue() != Double.MAX_VALUE) {
+                        summary.setDistanceKm(Math.round(entry.getValue() * 10) / 10.0);
+                    }
+                    return summary;
+                })
+                .toList();
+    }
+
+    private static double distanceKm(double lat1, double lon1, double lat2, double lon2) {
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
     @Transactional(readOnly = true)

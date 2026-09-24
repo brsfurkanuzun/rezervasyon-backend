@@ -12,6 +12,8 @@ public class ReviewResponse {
     private String customerName;
     private UUID businessId;
     private UUID appointmentId;
+    private UUID employeeId;
+    private String employeeName;
     private int rating;
     private String comment;
     private Instant createdAt;

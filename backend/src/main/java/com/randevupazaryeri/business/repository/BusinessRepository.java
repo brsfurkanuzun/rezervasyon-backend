@@ -17,6 +17,7 @@ public interface BusinessRepository extends JpaRepository<Business, UUID>, JpaSp
     Optional<Business> findBySlug(String slug);
     boolean existsBySlug(String slug);
     List<Business> findByOwnerId(UUID ownerId);
+    List<Business> findByStatusAndIdNot(BusinessStatus status, UUID id);
 
     @Query("""
         select distinct b from Business b

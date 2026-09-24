@@ -66,11 +66,15 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/actuator/health"
                         ).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/businesses/*/availability").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/businesses/*/reviews").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/businesses").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/businesses/*").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/categories/**").permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/v1/businesses",
+                                "/api/v1/businesses/{slug}",
+                                "/api/v1/businesses/{slug}/nearby",
+                                "/api/v1/businesses/{businessId}/availability",
+                                "/api/v1/businesses/{businessId}/reviews",
+                                "/api/v1/categories",
+                                "/api/v1/categories/**"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider())

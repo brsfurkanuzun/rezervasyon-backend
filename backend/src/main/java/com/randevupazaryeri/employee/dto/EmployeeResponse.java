@@ -13,6 +13,10 @@ public class EmployeeResponse {
     private String title;
     private String bio;
     private String photoUrl;
+    private List<String> portfolioUrls;
+    private List<String> languages;
     private boolean isActive;
     private List<UUID> serviceIds;
+    private Double averageRating;
+    private long reviewCount;
 }

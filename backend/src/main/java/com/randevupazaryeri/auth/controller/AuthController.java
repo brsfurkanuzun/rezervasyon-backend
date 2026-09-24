@@ -59,4 +59,11 @@ public class AuthController {
     public ApiResponse<UserResponse> me() {
         return ApiResponse.ok(authService.me());
     }
+
+    @PutMapping("/me")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Update current authenticated user")
+    public ApiResponse<UserResponse> updateMe(@Valid @RequestBody UpdateProfileRequest request) {
+        return ApiResponse.ok(authService.updateProfile(request));
+    }
 }

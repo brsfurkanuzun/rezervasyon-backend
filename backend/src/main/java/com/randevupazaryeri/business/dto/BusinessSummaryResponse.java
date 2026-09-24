@@ -14,6 +14,8 @@ public class BusinessSummaryResponse {
     private String slug;
     private String city;
     private String district;
+    private Double latitude;
+    private Double longitude;
     private String logoUrl;
     private String coverImageUrl;
     private BusinessStatus status;
@@ -21,4 +23,5 @@ public class BusinessSummaryResponse {
     private long reviewCount;
     private BigDecimal startingPrice;
     private List<CategoryResponse> categories;
+    private Double distanceKm;
 }

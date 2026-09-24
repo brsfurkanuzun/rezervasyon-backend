@@ -49,6 +49,13 @@ public class BusinessController {
         return ApiResponse.ok(businessService.getBySlug(slug));
     }
 
+    @GetMapping("/{slug}/nearby")
+    @Operation(summary = "Nearby active businesses, closest first")
+    public ApiResponse<List<BusinessSummaryResponse>> nearby(@PathVariable String slug,
+                                                             @RequestParam(defaultValue = "8") int limit) {
+        return ApiResponse.ok(businessService.nearby(slug, limit));
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('PROVIDER','ADMIN')")

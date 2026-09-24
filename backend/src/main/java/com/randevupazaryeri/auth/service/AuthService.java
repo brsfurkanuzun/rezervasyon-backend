@@ -105,6 +105,19 @@ public class AuthService {
         return UserMapper.toResponse(userService.getById(SecurityUtils.currentUserId()));
     }
 
+    @Transactional
+    public UserResponse updateProfile(UpdateProfileRequest request) {
+        User user = userService.getById(SecurityUtils.currentUserId());
+        user.setFirstName(request.getFirstName().trim());
+        user.setLastName(request.getLastName().trim());
+        user.setEmail(request.getEmail().trim().toLowerCase());
+        user.setPhone(blankToNull(request.getPhone()));
+        user.setBirthDate(request.getBirthDate());
+        user.setGender(blankToNull(request.getGender()));
+        user.setPhotoUrl(blankToNull(request.getPhotoUrl()));
+        return UserMapper.toResponse(userRepository.save(user));
+    }
+
     private AuthResponse issueTokens(User user) {
         String access = jwtService.createAccessToken(user.getId(), user.getRole());
         String rawRefresh = generateRawRefreshToken();
@@ -137,5 +150,9 @@ public class AuthService {
         } catch (Exception e) {
             throw new IllegalStateException("Unable to hash refresh token", e);
         }
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }
