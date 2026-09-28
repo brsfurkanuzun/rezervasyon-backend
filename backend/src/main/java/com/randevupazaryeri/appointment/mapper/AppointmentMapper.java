@@ -1,7 +1,10 @@
 package com.randevupazaryeri.appointment.mapper;
 
 import com.randevupazaryeri.appointment.dto.AppointmentResponse;
+import com.randevupazaryeri.appointment.dto.AppointmentServiceResponse;
 import com.randevupazaryeri.appointment.entity.Appointment;
+
+import java.util.List;
 
 public final class AppointmentMapper {
     private AppointmentMapper() {}
@@ -15,6 +18,9 @@ public final class AppointmentMapper {
                 .employeeName(a.getEmployee().getFirstName() + " " + a.getEmployee().getLastName())
                 .serviceId(a.getService().getId())
                 .serviceName(a.getService().getName())
+                .services(a.getServices() == null || a.getServices().isEmpty()
+                    ? List.of(toServiceResponse(a.getService()))
+                    : a.getServices().stream().map(AppointmentMapper::toServiceResponse).toList())
                 .startDateTime(a.getStartDateTime())
                 .endDateTime(a.getEndDateTime())
                 .status(a.getStatus())
@@ -22,6 +28,16 @@ public final class AppointmentMapper {
                 .customerNote(a.getCustomerNote())
                 .cancellationReason(a.getCancellationReason())
                 .createdAt(a.getCreatedAt())
+                .build();
+    }
+
+    private static AppointmentServiceResponse toServiceResponse(com.randevupazaryeri.serviceoffer.entity.ServiceOffer service) {
+        return AppointmentServiceResponse.builder()
+                .serviceId(service.getId())
+                .serviceName(service.getName())
+                .durationMinutes(service.getDurationMinutes())
+                .price(service.getPrice())
+                .currency(service.getCurrency())
                 .build();
     }
 }

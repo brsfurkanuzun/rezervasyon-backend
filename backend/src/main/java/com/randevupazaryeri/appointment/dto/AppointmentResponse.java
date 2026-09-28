@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Data @Builder
@@ -17,6 +18,7 @@ public class AppointmentResponse {
     private String employeeName;
     private UUID serviceId;
     private String serviceName;
+    private List<AppointmentServiceResponse> services;
     private Instant startDateTime;
     private Instant endDateTime;
     private AppointmentStatus status;

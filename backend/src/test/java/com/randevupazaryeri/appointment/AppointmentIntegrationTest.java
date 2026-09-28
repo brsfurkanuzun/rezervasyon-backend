@@ -125,6 +125,75 @@ class AppointmentIntegrationTest {
         book(start, customerToken).andExpect(status().isCreated());
     }
 
+        @Test
+        void booksMultipleServicesAsOneAppointmentUsingCombinedDurationAndPrice() throws Exception {
+        MvcResult secondService = mockMvc.perform(post("/api/v1/businesses/" + businessId + "/services")
+                .header("Authorization", "Bearer " + providerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name":"Color","durationMinutes":45,"price":200,"currency":"TRY"}
+                    """))
+            .andExpect(status().isCreated())
+            .andReturn();
+        UUID secondServiceId = UUID.fromString(objectMapper.readTree(secondService.getResponse().getContentAsString())
+            .path("data").path("id").asText());
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/businesses/" + businessId + "/employees/" + employeeId)
+                .header("Authorization", "Bearer " + providerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "firstName", "Ayse",
+                    "lastName", "Y",
+                    "serviceIds", java.util.List.of(serviceId, secondServiceId)))))
+            .andExpect(status().isOk());
+
+        Instant start = nextWeekdayAt(9, 0);
+        LocalDate appointmentDate = start.atZone(ZoneId.of("Europe/Istanbul")).toLocalDate();
+        MvcResult legacyAvailability = mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/businesses/" + businessId + "/availability")
+                .param("serviceId", serviceId.toString())
+                .param("employeeId", employeeId.toString())
+                .param("date", appointmentDate.toString()))
+            .andExpect(status().isOk())
+            .andReturn();
+        JsonNode legacySlots = objectMapper.readTree(legacyAvailability.getResponse().getContentAsString())
+            .path("data").path("employees").get(0).path("slots");
+        assertThat(legacySlots.get(0).path("end").asText()).isEqualTo("09:30");
+
+        MvcResult availability = mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/businesses/" + businessId + "/availability")
+                .param("serviceIds", serviceId.toString(), secondServiceId.toString())
+                .param("employeeId", employeeId.toString())
+                .param("date", appointmentDate.toString()))
+            .andExpect(status().isOk())
+            .andReturn();
+        JsonNode slots = objectMapper.readTree(availability.getResponse().getContentAsString())
+            .path("data").path("employees").get(0).path("slots");
+        JsonNode combinedSlot = null;
+        for (JsonNode slot : slots) {
+            if (slot.path("start").asText().equals("09:00")) combinedSlot = slot;
+        }
+        assertThat(combinedSlot).isNotNull();
+        assertThat(combinedSlot.path("end").asText()).isEqualTo("10:15");
+        assertThat(combinedSlot.path("available").asBoolean()).isTrue();
+
+        MvcResult result = mockMvc.perform(post("/api/v1/appointments")
+                .header("Authorization", "Bearer " + customerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "businessId", businessId,
+                    "employeeId", employeeId,
+                    "serviceIds", java.util.List.of(serviceId, secondServiceId),
+                    "startDateTime", start.toString()))))
+            .andExpect(status().isCreated())
+            .andReturn();
+        JsonNode appointment = objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
+        assertThat(appointment.path("serviceId").asText()).isEqualTo(serviceId.toString());
+        assertThat(appointment.path("serviceName").asText()).isEqualTo("Cut");
+        assertThat(appointment.path("endDateTime").asText()).isEqualTo(start.plus(Duration.ofMinutes(75)).toString());
+        assertThat(appointment.path("price").decimalValue()).isEqualByComparingTo("300.00");
+        assertThat(appointment.path("services").size()).isEqualTo(2);
+        assertThat(appointment.path("services").get(0).path("serviceName").asText()).isEqualTo("Cut");
+        }
+
     @Test
     void rejectsPastAppointment() throws Exception {
         Instant start = Instant.now().minus(Duration.ofHours(1));

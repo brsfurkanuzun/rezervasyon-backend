@@ -31,6 +31,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.*;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -58,22 +61,29 @@ public class AppointmentService {
         if (business.getStatus() != BusinessStatus.ACTIVE) {
             throw new InvalidAppointmentException("Business is not active");
         }
-        ServiceOffer service = serviceOfferRepository.findByIdAndBusinessId(request.getServiceId(), business.getId())
-                .orElseThrow(() -> new InvalidAppointmentException("Service not found in business"));
-        if (!service.isActive()) {
-            throw new InvalidAppointmentException("Service is inactive");
+        List<UUID> serviceIds = resolveServiceIds(request);
+        List<ServiceOffer> services = new ArrayList<>();
+        for (UUID serviceId : serviceIds) {
+            ServiceOffer service = serviceOfferRepository.findByIdAndBusinessId(serviceId, business.getId())
+                    .orElseThrow(() -> new InvalidAppointmentException("Service not found in business"));
+            if (!service.isActive()) {
+                throw new InvalidAppointmentException("Service is inactive");
+            }
+            services.add(service);
         }
         Employee employee = employeeRepository.findByIdAndBusinessId(request.getEmployeeId(), business.getId())
                 .orElseThrow(() -> new InvalidAppointmentException("Employee not found in business"));
         if (!employee.isActive()) {
             throw new InvalidAppointmentException("Employee is inactive");
         }
-        if (!employeeRepository.providesService(employee.getId(), service.getId())) {
-            throw new InvalidAppointmentException("Employee does not provide this service");
+        if (services.stream().anyMatch(service -> !employeeRepository.providesService(employee.getId(), service.getId()))) {
+            throw new InvalidAppointmentException("Employee does not provide every selected service");
         }
 
         Instant start = request.getStartDateTime();
-        Instant end = start.plus(Duration.ofMinutes(service.getDurationMinutes()));
+        long totalDurationMinutes = services.stream().mapToLong(ServiceOffer::getDurationMinutes).sum();
+        Instant end = start.plus(Duration.ofMinutes(totalDurationMinutes));
+        BigDecimal totalPrice = services.stream().map(ServiceOffer::getPrice).reduce(BigDecimal.ZERO, BigDecimal::add);
         if (!start.isAfter(Instant.now())) {
             throw new InvalidAppointmentException("Cannot book appointments in the past");
         }
@@ -90,11 +100,12 @@ public class AppointmentService {
                 .customer(userService.getById(principal.getId()))
                 .business(business)
                 .employee(employee)
-                .service(service)
+                .service(services.get(0))
+                .services(services)
                 .startDateTime(start)
                 .endDateTime(end)
                 .status(status)
-                .price(service.getPrice())
+                .price(totalPrice)
                 .customerNote(request.getCustomerNote())
                 .build();
         try {
@@ -109,6 +120,16 @@ public class AppointmentService {
                 "Appointment booked", "Your appointment is " + status.name());
 
         return AppointmentMapper.toResponse(appointment);
+    }
+
+    private List<UUID> resolveServiceIds(CreateAppointmentRequest request) {
+        List<UUID> requested = request.getServiceIds() == null || request.getServiceIds().isEmpty()
+                ? request.getServiceId() == null ? List.of() : List.of(request.getServiceId())
+                : request.getServiceIds();
+        if (requested.isEmpty() || new LinkedHashSet<>(requested).size() != requested.size()) {
+            throw new InvalidAppointmentException("Provide one or more unique services");
+        }
+        return List.copyOf(requested);
     }
 
     @Transactional(readOnly = true)

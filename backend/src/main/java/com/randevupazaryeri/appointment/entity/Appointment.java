@@ -10,6 +10,8 @@ import org.hibernate.annotations.UuidGenerator;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -34,6 +36,14 @@ public class Appointment {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "service_id", nullable = false)
     private ServiceOffer service;
+
+        @ManyToMany(fetch = FetchType.LAZY)
+        @JoinTable(name = "appointment_services",
+            joinColumns = @JoinColumn(name = "appointment_id"),
+            inverseJoinColumns = @JoinColumn(name = "service_id"))
+        @OrderColumn(name = "service_order")
+        @Builder.Default
+        private List<ServiceOffer> services = new ArrayList<>();
 
     @Column(name = "start_date_time", nullable = false)
     private Instant startDateTime;

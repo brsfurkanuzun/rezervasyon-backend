@@ -10,6 +10,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -23,9 +24,10 @@ public class AvailabilityController {
     @Operation(summary = "Compute available appointment slots")
     public ApiResponse<AvailabilityResponse> get(
             @PathVariable UUID businessId,
-            @RequestParam UUID serviceId,
+            @RequestParam(required = false) UUID serviceId,
+            @RequestParam(required = false) List<UUID> serviceIds,
             @RequestParam(required = false) UUID employeeId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return ApiResponse.ok(availabilityService.getAvailability(businessId, serviceId, employeeId, date));
+        return ApiResponse.ok(availabilityService.getAvailability(businessId, serviceId, serviceIds, employeeId, date));
     }
 }

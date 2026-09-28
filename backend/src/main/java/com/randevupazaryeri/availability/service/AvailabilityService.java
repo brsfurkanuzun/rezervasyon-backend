@@ -5,6 +5,7 @@ import com.randevupazaryeri.appointment.repository.AppointmentRepository;
 import com.randevupazaryeri.availability.dto.*;
 import com.randevupazaryeri.business.entity.Business;
 import com.randevupazaryeri.business.repository.BusinessRepository;
+import com.randevupazaryeri.common.exception.InvalidAppointmentException;
 import com.randevupazaryeri.common.exception.ResourceNotFoundException;
 import com.randevupazaryeri.employee.entity.Employee;
 import com.randevupazaryeri.employee.entity.TimeOff;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -38,22 +40,34 @@ public class AvailabilityService {
     private final TimeOffRepository timeOffRepository;
     private final AppointmentRepository appointmentRepository;
 
-    public AvailabilityResponse getAvailability(UUID businessId, UUID serviceId, UUID employeeId, LocalDate date) {
+        public AvailabilityResponse getAvailability(UUID businessId, UUID serviceId, List<UUID> serviceIds,
+                            UUID employeeId, LocalDate date) {
         Business business = businessRepository.findById(businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Business not found"));
-        ServiceOffer service = serviceOfferRepository.findByIdAndBusinessId(serviceId, businessId)
-                .orElseThrow(() -> new ResourceNotFoundException("Service not found"));
+        List<UUID> requestedServiceIds = resolveServiceIds(serviceId, serviceIds);
+        List<ServiceOffer> services = requestedServiceIds.stream()
+            .map(id -> serviceOfferRepository.findByIdAndBusinessId(id, businessId)
+                .orElseThrow(() -> new ResourceNotFoundException("Service not found")))
+            .toList();
+        if (services.stream().anyMatch(service -> !service.isActive())) {
+            throw new ResourceNotFoundException("Service not found");
+        }
+        long totalDurationMinutes = services.stream().mapToLong(ServiceOffer::getDurationMinutes).sum();
 
         List<Employee> employees;
         if (employeeId != null) {
             Employee e = employeeRepository.findByIdAndBusinessId(employeeId, businessId)
                     .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
-            if (!employeeRepository.providesService(employeeId, serviceId)) {
+            if (!e.isActive() || requestedServiceIds.stream()
+                .anyMatch(id -> !employeeRepository.providesService(employeeId, id))) {
                 throw new ResourceNotFoundException("Employee does not provide this service");
             }
             employees = List.of(e);
         } else {
-            employees = employeeRepository.findActiveProvidingService(businessId, serviceId);
+            employees = employeeRepository.findActiveProvidingService(businessId, requestedServiceIds.get(0)).stream()
+                .filter(employee -> requestedServiceIds.stream()
+                    .allMatch(id -> employeeRepository.providesService(employee.getId(), id)))
+                .toList();
         }
 
         ZoneId zone = ZoneId.of(business.getTimezone());
@@ -73,7 +87,7 @@ public class AvailabilityService {
                 LocalDateTime windowStart = LocalDateTime.of(date, wh.getStartTime());
                 LocalDateTime windowEnd = LocalDateTime.of(date, wh.getEndTime());
                 LocalDateTime cursor = windowStart;
-                Duration duration = Duration.ofMinutes(service.getDurationMinutes());
+                Duration duration = Duration.ofMinutes(totalDurationMinutes);
                 while (!cursor.plus(duration).isAfter(windowEnd)) {
                     Instant start = cursor.atZone(zone).toInstant();
                     Instant end = cursor.plus(duration).atZone(zone).toInstant();
@@ -95,6 +109,16 @@ public class AvailabilityService {
                     .build());
         }
         return AvailabilityResponse.builder().date(date).employees(result).build();
+    }
+
+    private List<UUID> resolveServiceIds(UUID serviceId, List<UUID> serviceIds) {
+        List<UUID> requested = serviceIds == null || serviceIds.isEmpty()
+                ? serviceId == null ? List.of() : List.of(serviceId)
+                : serviceIds;
+        if (requested.isEmpty() || new LinkedHashSet<>(requested).size() != requested.size()) {
+            throw new InvalidAppointmentException("Provide one or more unique services");
+        }
+        return List.copyOf(requested);
     }
 
     private boolean overlapsTimeOff(Instant start, Instant end, List<TimeOff> timeOffs) {

@@ -12,6 +12,7 @@ import java.util.UUID;
 
 public interface ReviewRepository extends JpaRepository<Review, UUID> {
     boolean existsByAppointmentId(UUID appointmentId);
+    boolean existsByCustomerIdAndBusinessId(UUID customerId, UUID businessId);
     long countByBusinessId(UUID businessId);
     List<Review> findTop5ByBusinessIdOrderByCreatedAtDesc(UUID businessId);
     List<Review> findTop20ByBusinessIdOrderByCreatedAtDesc(UUID businessId);
