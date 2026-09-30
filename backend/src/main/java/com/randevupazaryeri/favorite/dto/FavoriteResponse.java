@@ -11,5 +11,8 @@ public class FavoriteResponse {
     private UUID businessId;
     private String businessName;
     private String businessSlug;
+    private String businessCoverImageUrl;
+    private String businessCity;
+    private String businessDistrict;
     private Instant createdAt;
 }

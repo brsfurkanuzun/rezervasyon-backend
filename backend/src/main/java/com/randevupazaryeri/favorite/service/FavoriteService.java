@@ -58,6 +58,9 @@ public class FavoriteService {
                 .businessId(f.getBusiness().getId())
                 .businessName(f.getBusiness().getName())
                 .businessSlug(f.getBusiness().getSlug())
+                .businessCoverImageUrl(f.getBusiness().getCoverImageUrl())
+                .businessCity(f.getBusiness().getCity())
+                .businessDistrict(f.getBusiness().getDistrict())
                 .createdAt(f.getCreatedAt())
                 .build();
     }

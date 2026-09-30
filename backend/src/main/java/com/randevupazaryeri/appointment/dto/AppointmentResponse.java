@@ -14,8 +14,13 @@ public class AppointmentResponse {
     private UUID customerId;
     private UUID businessId;
     private String businessName;
+    private String businessSlug;
+    private String businessCoverImageUrl;
+    private String businessTimezone;
     private UUID employeeId;
     private String employeeName;
+    private String employeePhotoUrl;
+    private String employeeTitle;
     private UUID serviceId;
     private String serviceName;
     private List<AppointmentServiceResponse> services;
