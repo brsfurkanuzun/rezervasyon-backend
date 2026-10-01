@@ -19,9 +19,11 @@ import com.randevupazaryeri.employee.repository.EmployeeRepository;
 import com.randevupazaryeri.employee.repository.TimeOffRepository;
 import com.randevupazaryeri.employee.repository.WorkingHourRepository;
 import com.randevupazaryeri.notification.service.NotificationService;
+import com.randevupazaryeri.push.entity.PushApp;
 import com.randevupazaryeri.serviceoffer.entity.ServiceOffer;
 import com.randevupazaryeri.serviceoffer.repository.ServiceOfferRepository;
 import com.randevupazaryeri.user.entity.Role;
+import com.randevupazaryeri.user.entity.User;
 import com.randevupazaryeri.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -31,15 +33,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.*;
+import java.time.format.DateTimeFormatter;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class AppointmentService {
+    private static final DateTimeFormatter NOTIFICATION_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("d MMMM EEEE, HH:mm", Locale.forLanguageTag("tr-TR"));
+
 
     private final AppointmentRepository appointmentRepository;
     private final BusinessOwnershipService ownershipService;
@@ -114,10 +123,14 @@ public class AppointmentService {
             throw new AppointmentConflictException();
         }
 
+        boolean pending = status == AppointmentStatus.PENDING;
         notificationService.notifyUser(business.getOwner().getId(), "APPOINTMENT_CREATED",
-                "New appointment", "A new appointment was booked at " + business.getName());
+                pending ? "Yeni randevu talebi" : "Yeni randevu",
+                String.join(" · ", fullName(appointment.getCustomer()), serviceSummary(appointment), when(appointment)),
+                PushApp.PARTNER, pushData(appointment, "APPOINTMENT_CREATED"));
         notificationService.notifyUser(principal.getId(), "APPOINTMENT_CREATED",
-                "Appointment booked", "Your appointment is " + status.name());
+                pending ? "Randevu talebin gönderildi" : "Randevun oluşturuldu",
+                business.getName() + " · " + when(appointment));
 
         return AppointmentMapper.toResponse(appointment);
     }
@@ -168,8 +181,25 @@ public class AppointmentService {
                 throw new InvalidAppointmentException("Cancellation window has closed");
             }
         }
+        boolean wasPending = appointment.getStatus() == AppointmentStatus.PENDING;
+        String reason = request != null && request.getReason() != null && !request.getReason().isBlank()
+                ? request.getReason().trim() : null;
         appointment.setStatus(AppointmentStatus.CANCELLED);
-        appointment.setCancellationReason(request != null ? request.getReason() : null);
+        appointment.setCancellationReason(reason);
+
+        if (isCustomer) {
+            notificationService.notifyUser(appointment.getBusiness().getOwner().getId(), "APPOINTMENT_CANCELLED",
+                    "Randevu iptal edildi",
+                    String.join(" · ", fullName(appointment.getCustomer()), serviceSummary(appointment), when(appointment)),
+                    PushApp.PARTNER, pushData(appointment, "APPOINTMENT_CANCELLED"));
+        } else {
+            String type = wasPending ? "APPOINTMENT_REJECTED" : "APPOINTMENT_CANCELLED";
+            String body = appointment.getBusiness().getName() + " · " + when(appointment)
+                    + (reason != null ? "\nSebep: " + reason : "");
+            notificationService.notifyUser(appointment.getCustomer().getId(), type,
+                    wasPending ? "Randevu talebin reddedildi" : "Randevun iptal edildi", body,
+                    PushApp.CUSTOMER, pushData(appointment, type));
+        }
         return AppointmentMapper.toResponse(appointment);
     }
 
@@ -182,7 +212,8 @@ public class AppointmentService {
         }
         appointment.setStatus(AppointmentStatus.CONFIRMED);
         notificationService.notifyUser(appointment.getCustomer().getId(), "APPOINTMENT_CONFIRMED",
-                "Appointment confirmed", "Your appointment was confirmed");
+                "Randevun onaylandı", appointment.getBusiness().getName() + " · " + when(appointment),
+                PushApp.CUSTOMER, pushData(appointment, "APPOINTMENT_CONFIRMED"));
         return AppointmentMapper.toResponse(appointment);
     }
 
@@ -226,6 +257,31 @@ public class AppointmentService {
         if (!ok) {
             throw new InvalidAppointmentException("Outside employee working hours");
         }
+    }
+
+    private static String fullName(User user) {
+        return (user.getFirstName() + " " + user.getLastName()).trim();
+    }
+
+    private static String serviceSummary(Appointment appointment) {
+        List<ServiceOffer> services = appointment.getServices();
+        if (services == null || services.isEmpty()) {
+            return appointment.getService().getName();
+        }
+        return services.stream().map(ServiceOffer::getName).collect(Collectors.joining(", "));
+    }
+
+    private static String when(Appointment appointment) {
+        return NOTIFICATION_TIME_FORMAT
+                .withZone(ZoneId.of(appointment.getBusiness().getTimezone()))
+                .format(appointment.getStartDateTime());
+    }
+
+    private static Map<String, String> pushData(Appointment appointment, String type) {
+        return Map.of(
+                "type", type,
+                "appointmentId", appointment.getId().toString(),
+                "businessId", appointment.getBusiness().getId().toString());
     }
 
     private Appointment getAppointment(UUID id) {

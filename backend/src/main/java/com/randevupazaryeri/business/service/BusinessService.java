@@ -71,7 +71,7 @@ public class BusinessService {
                 .logoUrl(request.getLogoUrl())
                 .coverImageUrl(request.getCoverImageUrl())
                 .timezone(request.getTimezone() != null ? request.getTimezone() : "Europe/Istanbul")
-                .autoConfirm(request.getAutoConfirm() == null || request.getAutoConfirm())
+                .autoConfirm(Boolean.TRUE.equals(request.getAutoConfirm()))
                 .status(BusinessStatus.PENDING_APPROVAL)
                 .build();
         applyCategories(business, request.getCategoryIds());

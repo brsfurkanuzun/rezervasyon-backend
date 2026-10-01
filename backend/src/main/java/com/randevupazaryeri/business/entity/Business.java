@@ -48,7 +48,7 @@ public class Business {
     private String timezone = "Europe/Istanbul";
 
     @Column(name = "auto_confirm", nullable = false)
-    private boolean autoConfirm = true;
+    private boolean autoConfirm = false;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)

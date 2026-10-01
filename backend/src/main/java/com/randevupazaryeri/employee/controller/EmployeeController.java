@@ -57,6 +57,12 @@ public class EmployeeController {
         return ApiResponse.ok(employeeService.listWorkingHours(businessId, employeeId));
     }
 
+    @GetMapping("/{employeeId}/time-offs")
+    @Operation(summary = "List time offs")
+    public ApiResponse<List<TimeOffResponse>> listTimeOffs(@PathVariable UUID businessId, @PathVariable UUID employeeId) {
+        return ApiResponse.ok(employeeService.listTimeOffs(businessId, employeeId));
+    }
+
     @PostMapping("/{employeeId}/time-offs")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Add time off")

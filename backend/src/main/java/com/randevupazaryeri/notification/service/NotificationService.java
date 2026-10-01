@@ -5,23 +5,36 @@ import com.randevupazaryeri.common.security.SecurityUtils;
 import com.randevupazaryeri.notification.dto.NotificationResponse;
 import com.randevupazaryeri.notification.entity.Notification;
 import com.randevupazaryeri.notification.repository.NotificationRepository;
+import com.randevupazaryeri.push.entity.PushApp;
+import com.randevupazaryeri.push.service.PushNotificationEvent;
 import com.randevupazaryeri.user.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
 import java.util.UUID;
 
 /**
- * In-app notification store. Channel adapters (email/SMS/push/WhatsApp) can plug in later.
+ * In-app notification store, optionally fanned out as an iOS push to one of the apps.
  */
 @Service
 @RequiredArgsConstructor
 public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final UserService userService;
+    private final ApplicationEventPublisher eventPublisher;
+
+    /** Stores the notification and pushes it to the user's devices for {@code pushApp}. */
+    @Transactional
+    public void notifyUser(UUID userId, String type, String title, String message,
+                           PushApp pushApp, Map<String, String> pushData) {
+        notifyUser(userId, type, title, message);
+        eventPublisher.publishEvent(new PushNotificationEvent(userId, pushApp, title, message, pushData));
+    }
 
     @Transactional
     public void notifyUser(UUID userId, String type, String title, String message) {

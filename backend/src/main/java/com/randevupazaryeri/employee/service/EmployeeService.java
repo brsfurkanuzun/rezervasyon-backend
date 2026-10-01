@@ -116,6 +116,16 @@ public class EmployeeService {
                 .startAt(timeOff.getStartAt()).endAt(timeOff.getEndAt()).build();
     }
 
+    @Transactional(readOnly = true)
+    public List<TimeOffResponse> listTimeOffs(UUID businessId, UUID employeeId) {
+        ownershipService.requireOwnedBusiness(businessId);
+        getInBusiness(employeeId, businessId);
+        return timeOffRepository.findByEmployeeId(employeeId).stream()
+                .map(t -> TimeOffResponse.builder().id(t.getId()).title(t.getTitle())
+                        .startAt(t.getStartAt()).endAt(t.getEndAt()).build())
+                .toList();
+    }
+
     @Transactional
     public void deleteTimeOff(UUID businessId, UUID employeeId, UUID timeOffId) {
         ownershipService.requireOwnedBusiness(businessId);

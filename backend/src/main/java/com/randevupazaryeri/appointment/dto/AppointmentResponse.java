@@ -12,6 +12,10 @@ import java.util.UUID;
 public class AppointmentResponse {
     private UUID id;
     private UUID customerId;
+    private String customerName;
+    private String customerPhone;
+    private String customerEmail;
+    private String customerPhotoUrl;
     private UUID businessId;
     private String businessName;
     private String businessSlug;

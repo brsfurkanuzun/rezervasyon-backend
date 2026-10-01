@@ -54,6 +54,19 @@ app:
   appointment:
     customer-cancellation-deadline-hours: 2
 
+  apns:
+    team-id: ${APNS_TEAM_ID:}
+    key-id: ${APNS_KEY_ID:}
+    private-key: ${APNS_PRIVATE_KEY:}
+    partner:
+      key-id: ${APNS_PARTNER_KEY_ID:}
+      private-key: ${APNS_PARTNER_PRIVATE_KEY:}
+    customer:
+      key-id: ${APNS_CUSTOMER_KEY_ID:}
+      private-key: ${APNS_CUSTOMER_PRIVATE_KEY:}
+    customer-topic: ${APNS_CUSTOMER_TOPIC:com.rezplz.rezplz}
+    partner-topic: ${APNS_PARTNER_TOPIC:com.rezplz.partner}
+
 
 springdoc:
   api-docs:
