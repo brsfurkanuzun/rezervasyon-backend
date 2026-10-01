@@ -153,10 +153,37 @@ public class EmployeeInvitationService {
     /** Removes the staff member's access; the employee record and its history stay. */
     @Transactional
     public EmployeeResponse unlinkAccount(UUID businessId, UUID employeeId) {
-        ownershipService.requireOwnedBusiness(businessId);
+        Business business = ownershipService.requireOwnedBusiness(businessId);
         Employee employee = getEmployee(businessId, employeeId);
-        employee.setUser(null);
+        detachAccount(business, employee);
         return EmployeeMapper.toResponse(employee);
+    }
+
+    /**
+     * Takes the expert off the team: they lose app access, can no longer be booked and disappear from
+     * employee lists. Past and already booked appointments keep pointing at the record.
+     */
+    @Transactional
+    public void removeFromTeam(UUID businessId, UUID employeeId) {
+        Business business = ownershipService.requireOwnedBusiness(businessId);
+        Employee employee = getEmployee(businessId, employeeId);
+        detachAccount(business, employee);
+        revokePending(employeeId);
+        employee.setActive(false);
+    }
+
+    private void detachAccount(Business business, Employee employee) {
+        User member = employee.getUser();
+        if (member == null) {
+            return;
+        }
+        employee.setUser(null);
+        if (!member.getId().equals(business.getOwner().getId())) {
+            notificationService.notifyUser(member.getId(), "TEAM_REMOVED",
+                    "Ekipten çıkarıldın",
+                    business.getName() + " ekibindeki erişimin kaldırıldı.",
+                    PushApp.PARTNER, Map.of("type", "TEAM_REMOVED", "businessId", business.getId().toString()));
+        }
     }
 
     /** The owner works as an expert too: links the owner's own account to one of the employee profiles. */

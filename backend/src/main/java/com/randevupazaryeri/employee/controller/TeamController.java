@@ -45,6 +45,13 @@ public class TeamController {
         invitationService.revokeById(businessId, invitationId);
     }
 
+    @DeleteMapping("/employees/{employeeId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Remove an expert from the team: no app access, no new bookings (owner)")
+    public void remove(@PathVariable UUID businessId, @PathVariable UUID employeeId) {
+        invitationService.removeFromTeam(businessId, employeeId);
+    }
+
     @PostMapping("/employees/self")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Add the owner to the team as an expert with a new profile (owner)")

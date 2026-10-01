@@ -193,6 +193,28 @@ class TeamInvitationIntegrationTest {
     }
 
     @Test
+    void removedExpertLosesAccessAndIsNoLongerBookable() throws Exception {
+        String code = data(call(post(biz("/invitations")), owner, null)).path("code").asText();
+        call(post("/api/v1/invitations/" + code + "/accept"), staff, null).andExpect(status().isOk());
+        String expert = data(call(get("/api/v1/provider/workplaces"), staff, null)).get(0).path("employeeId").asText();
+
+        call(delete(biz("/employees/" + expert)), staff, null).andExpect(status().isForbidden());
+        call(delete(biz("/employees/" + expert)), owner, null).andExpect(status().isNoContent());
+
+        assertThat(data(call(get("/api/v1/provider/workplaces"), staff, null))).isEmpty();
+        call(get(biz("/appointments")), staff, null).andExpect(status().isForbidden());
+        assertThat(data(call(get(biz("/employees")), owner, null))).extracting(n -> n.path("id").asText())
+                .containsExactlyInAnyOrder(ayse, mehmet);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notifications n JOIN users u ON u.id = n.user_id "
+                + "WHERE u.email = 'staff@test.com' AND n.type = 'TEAM_REMOVED'", Integer.class)).isEqualTo(1);
+
+        String body = objectMapper.writeValueAsString(Map.of(
+                "businessId", businessId, "employeeId", expert, "serviceId", serviceId,
+                "startDateTime", nextWeekdayAt(10).toString()));
+        call(post("/api/v1/appointments"), customer, body).andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
     void ownerAddsThemselvesToTheTeam() throws Exception {
         JsonNode me = data(call(post(biz("/employees/self")), owner, null).andExpect(status().isCreated()));
         assertThat(me.path("accountLinked").asBoolean()).isTrue();

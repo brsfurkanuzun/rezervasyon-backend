@@ -63,7 +63,8 @@ public class EmployeeService {
 
     @Transactional(readOnly = true)
     public List<EmployeeResponse> list(UUID businessId) {
-        return employeeRepository.findByBusinessId(businessId).stream().map(EmployeeMapper::toResponse).toList();
+        return employeeRepository.findByBusinessIdAndIsActiveTrue(businessId).stream()
+                .map(EmployeeMapper::toResponse).toList();
     }
 
     @Transactional
