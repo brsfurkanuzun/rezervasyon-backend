@@ -63,7 +63,6 @@ class TeamInvitationIntegrationTest {
         businessId = data(call(post("/api/v1/businesses"), owner, """
                 {"name":"Team Salon","city":"Istanbul","district":"Kadikoy","timezone":"Europe/Istanbul","autoConfirm":false}
                 """).andExpect(status().isCreated())).path("id").asText();
-        jdbc.update("UPDATE businesses SET status = 'ACTIVE' WHERE id = ?::uuid", businessId);
 
         serviceId = data(call(post(biz("/services")), owner, """
                 {"name":"Cut","durationMinutes":30,"price":100,"currency":"TRY"}
