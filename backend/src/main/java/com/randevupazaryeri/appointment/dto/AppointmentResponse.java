@@ -23,6 +23,8 @@ public class AppointmentResponse {
     private String businessTimezone;
     private UUID employeeId;
     private String employeeName;
+    /** The expert uses the partner app with their own account, so only they answer this appointment's request. */
+    private boolean expertManaged;
     private String employeePhotoUrl;
     private String employeeTitle;
     private UUID serviceId;

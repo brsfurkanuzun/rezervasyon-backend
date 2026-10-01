@@ -193,6 +193,33 @@ class TeamInvitationIntegrationTest {
     }
 
     @Test
+    void onlyTheLinkedExpertAnswersTheirRequests() throws Exception {
+        String code = data(call(post(biz("/invitations")), owner, null)).path("code").asText();
+        call(post("/api/v1/invitations/" + code + "/accept"), staff, null).andExpect(status().isOk());
+        String expert = data(call(get("/api/v1/provider/workplaces"), staff, null)).get(0).path("employeeId").asText();
+
+        String expertRequest = book(expert, 10);
+        String ownerRequest = book(mehmet, 10);
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notifications n JOIN users u ON u.id = n.user_id "
+                + "WHERE u.email = 'owner@test.com' AND n.type = 'APPOINTMENT_CREATED'", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notifications n JOIN users u ON u.id = n.user_id "
+                + "WHERE u.email = 'staff@test.com' AND n.type = 'APPOINTMENT_CREATED'", Integer.class)).isEqualTo(1);
+
+        JsonNode ownerView = data(call(get(biz("/appointments")), owner, null));
+        assertThat(ownerView).hasSize(2);
+        for (JsonNode a : ownerView) {
+            assertThat(a.path("expertManaged").asBoolean()).isEqualTo(a.path("id").asText().equals(expertRequest));
+        }
+
+        call(post(biz("/appointments/" + expertRequest + "/confirm")), owner, null).andExpect(status().isForbidden());
+        call(post("/api/v1/appointments/" + expertRequest + "/cancel"), owner, "{\"reason\":\"x\"}")
+                .andExpect(status().isForbidden());
+        call(post(biz("/appointments/" + ownerRequest + "/confirm")), owner, null).andExpect(status().isOk());
+        call(post(biz("/appointments/" + expertRequest + "/confirm")), staff, null).andExpect(status().isOk());
+    }
+
+    @Test
     void removedExpertLosesAccessAndIsNoLongerBookable() throws Exception {
         String code = data(call(post(biz("/invitations")), owner, null)).path("code").asText();
         call(post("/api/v1/invitations/" + code + "/accept"), staff, null).andExpect(status().isOk());

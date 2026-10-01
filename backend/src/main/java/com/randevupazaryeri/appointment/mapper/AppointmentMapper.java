@@ -3,6 +3,7 @@ package com.randevupazaryeri.appointment.mapper;
 import com.randevupazaryeri.appointment.dto.AppointmentResponse;
 import com.randevupazaryeri.appointment.dto.AppointmentServiceResponse;
 import com.randevupazaryeri.appointment.entity.Appointment;
+import com.randevupazaryeri.user.entity.User;
 
 import java.util.List;
 
@@ -23,6 +24,7 @@ public final class AppointmentMapper {
                 .businessTimezone(a.getBusiness().getTimezone())
                 .employeeId(a.getEmployee().getId())
                 .employeeName(a.getEmployee().getFirstName() + " " + a.getEmployee().getLastName())
+                .expertManaged(AppointmentMapper.assignedExpert(a) != null)
                 .employeePhotoUrl(a.getEmployee().getPhotoUrl())
                 .employeeTitle(a.getEmployee().getTitle())
                 .serviceId(a.getService().getId())
@@ -48,5 +50,14 @@ public final class AppointmentMapper {
                 .price(service.getPrice())
                 .currency(service.getCurrency())
                 .build();
+    }
+
+    /** The linked staff account of the appointment's expert; null when the owner handles it (unlinked or self). */
+    public static User assignedExpert(Appointment a) {
+        var user = a.getEmployee().getUser();
+        if (user == null || user.getId().equals(a.getBusiness().getOwner().getId())) {
+            return null;
+        }
+        return user;
     }
 }

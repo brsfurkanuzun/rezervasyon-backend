@@ -184,6 +184,9 @@ public class AppointmentService {
             }
         }
         boolean wasPending = appointment.getStatus() == AppointmentStatus.PENDING;
+        if (wasPending && !isCustomer) {
+            requireResponder(appointment);
+        }
         String reason = request != null && request.getReason() != null && !request.getReason().isBlank()
                 ? request.getReason().trim() : null;
         appointment.setStatus(AppointmentStatus.CANCELLED);
@@ -208,6 +211,7 @@ public class AppointmentService {
         if (appointment.getStatus() != AppointmentStatus.PENDING) {
             throw new InvalidAppointmentException("Only pending appointments can be confirmed");
         }
+        requireResponder(appointment);
         appointment.setStatus(AppointmentStatus.CONFIRMED);
         notificationService.notifyUser(appointment.getCustomer().getId(), "APPOINTMENT_CONFIRMED",
                 "Randevun onaylandı", appointment.getBusiness().getName() + " · " + when(appointment),
@@ -255,14 +259,20 @@ public class AppointmentService {
         }
     }
 
-    /** Owners and staff only see their own appointments in the partner app, so both get notified. */
+    /** An expert with their own account handles their appointments; otherwise the owner does. */
     private void notifyBusinessSide(Appointment appointment, String type, String title) {
         String body = String.join(" · ", fullName(appointment.getCustomer()), serviceSummary(appointment), when(appointment));
-        UUID ownerId = appointment.getBusiness().getOwner().getId();
-        notificationService.notifyUser(ownerId, type, title, body, PushApp.PARTNER, pushData(appointment, type));
-        User staff = appointment.getEmployee().getUser();
-        if (staff != null && !staff.getId().equals(ownerId)) {
-            notificationService.notifyUser(staff.getId(), type, title, body, PushApp.PARTNER, pushData(appointment, type));
+        User expert = AppointmentMapper.assignedExpert(appointment);
+        UUID recipient = expert != null ? expert.getId() : appointment.getBusiness().getOwner().getId();
+        notificationService.notifyUser(recipient, type, title, body, PushApp.PARTNER, pushData(appointment, type));
+    }
+
+    /** Requests for an expert who has their own account are answered by that expert alone. */
+    private void requireResponder(Appointment appointment) {
+        var principal = SecurityUtils.currentPrincipal();
+        User expert = AppointmentMapper.assignedExpert(appointment);
+        if (expert != null && !expert.getId().equals(principal.getId()) && principal.getRole() != Role.ADMIN) {
+            throw new ForbiddenException("Only the assigned expert can respond to this request");
         }
     }
 
