@@ -9,7 +9,10 @@ import org.hibernate.annotations.UuidGenerator;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Owner-issued invitation that links a user account to an employee (staff) record. */
+/**
+ * Owner-issued invitation. With an employee it links the invitee's account to that existing profile;
+ * without one, accepting creates a new expert profile from the invitee's account.
+ */
 @Entity
 @Table(name = "employee_invitations")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
@@ -21,8 +24,8 @@ public class EmployeeInvitation {
     @JoinColumn(name = "business_id", nullable = false)
     private Business business;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "employee_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "employee_id")
     private Employee employee;
 
     @Column(nullable = false, length = 16)

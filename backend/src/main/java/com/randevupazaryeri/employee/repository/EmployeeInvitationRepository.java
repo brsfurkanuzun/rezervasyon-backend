@@ -18,6 +18,11 @@ public interface EmployeeInvitationRepository extends JpaRepository<EmployeeInvi
 
     List<EmployeeInvitation> findByEmployeeIdAndStatus(UUID employeeId, InvitationStatus status);
 
+    List<EmployeeInvitation> findByBusinessIdAndEmployeeIsNullAndStatusOrderByCreatedAtDesc(
+            UUID businessId, InvitationStatus status);
+
+    Optional<EmployeeInvitation> findByIdAndBusinessId(UUID id, UUID businessId);
+
     @Query("""
         select i from EmployeeInvitation i
         where lower(i.email) = lower(:email)

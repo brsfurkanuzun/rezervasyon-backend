@@ -161,6 +161,51 @@ class TeamInvitationIntegrationTest {
     }
 
     @Test
+    void openCodeCreatesTheExpertFromTheJoiningAccount() throws Exception {
+        String first = data(call(post(biz("/invitations")), owner, null).andExpect(status().isCreated()))
+                .path("code").asText();
+        String second = data(call(post(biz("/invitations")), owner, null).andExpect(status().isCreated()))
+                .path("code").asText();
+        assertThat(first).isNotEqualTo(second);
+        call(post(biz("/invitations")), staff, null).andExpect(status().isForbidden());
+
+        JsonNode pending = data(call(get(biz("/invitations")), owner, null));
+        assertThat(pending).hasSize(2);
+        assertThat(pending.get(0).path("employeeId").isMissingNode()).isTrue();
+
+        JsonNode preview = data(call(get("/api/v1/invitations/" + first), staff, null));
+        assertThat(preview.path("businessName").asText()).isEqualTo("Team Salon");
+
+        call(post("/api/v1/invitations/" + first + "/accept"), staff, null).andExpect(status().isOk());
+
+        JsonNode workplace = data(call(get("/api/v1/provider/workplaces"), staff, null)).get(0);
+        assertThat(workplace.path("role").asText()).isEqualTo("STAFF");
+        String newExpert = workplace.path("employeeId").asText();
+        assertThat(newExpert).isNotIn(ayse, mehmet);
+        assertThat(data(call(get(biz("/invitations")), owner, null))).hasSize(1);
+
+        book(newExpert, 10);
+        assertThat(data(call(get(biz("/appointments")), staff, null))).hasSize(1);
+
+        String secondId = data(call(get(biz("/invitations")), owner, null)).get(0).path("id").asText();
+        call(delete(biz("/invitations/" + secondId)), owner, null).andExpect(status().isNoContent());
+        call(get("/api/v1/invitations/" + second), staff, null).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void ownerAddsThemselvesToTheTeam() throws Exception {
+        JsonNode me = data(call(post(biz("/employees/self")), owner, null).andExpect(status().isCreated()));
+        assertThat(me.path("accountLinked").asBoolean()).isTrue();
+        call(post(biz("/employees/self")), owner, null).andExpect(status().isUnprocessableEntity());
+        call(post(biz("/employees/self")), staff, null).andExpect(status().isForbidden());
+
+        String ownerExpert = me.path("id").asText();
+        assertThat(data(call(get("/api/v1/provider/workplaces"), owner, null)).get(0).path("employeeId").asText())
+                .isEqualTo(ownerExpert);
+        book(ownerExpert, 11);
+    }
+
+    @Test
     void customerCanUpgradeToBusinessAccountWithSameLogin() throws Exception {
         call(get("/api/v1/provider/workplaces"), customer, null)
                 .andExpect(status().isForbidden());

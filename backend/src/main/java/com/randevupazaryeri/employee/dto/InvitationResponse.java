@@ -20,6 +20,7 @@ public class InvitationResponse {
     private UUID businessId;
     private String businessName;
     private String businessLogoUrl;
+    /** Null for open invitations: the expert profile is created from the invitee's account. */
     private UUID employeeId;
     private String employeeName;
     private String employeeTitle;
