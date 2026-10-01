@@ -3,7 +3,7 @@ spring:
     name: randevu-backend
 
   datasource:
-    url: ${DATABASE_URL_JDBC:jdbc:postgresql://localhost:5433/randevu}
+    url: jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDATABASE}
     username: ${DATABASE_USERNAME:randevu}
     password: ${DATABASE_PASSWORD:randevu}
 
