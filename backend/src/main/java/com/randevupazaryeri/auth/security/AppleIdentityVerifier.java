@@ -64,10 +64,12 @@ public class AppleIdentityVerifier {
                     .parseSignedClaims(identityToken)
                     .getPayload();
         } catch (JwtException | IllegalArgumentException ex) {
+            log.warn("Rejected Apple identity token: {}", ex.getMessage());
             throw new UnauthorizedException("Invalid Apple identity token");
         }
         Set<String> audience = claims.getAudience();
         if (audience == null || audience.stream().noneMatch(properties.getAudiences()::contains)) {
+            log.warn("Rejected Apple identity token for audience {}", audience);
             throw new UnauthorizedException("Apple identity token was issued for another app");
         }
         Object verified = claims.get("email_verified");
@@ -83,8 +85,11 @@ public class AppleIdentityVerifier {
         boolean stale = keysFetchedAt.plus(KEYS_MAX_AGE).isBefore(now);
         boolean mayRefetch = keysFetchedAt.plus(MIN_REFETCH_INTERVAL).isBefore(now);
         if ((key == null || stale) && mayRefetch) {
-            keys = fetchKeys();
-            keysFetchedAt = now;
+            Map<String, PublicKey> fetched = fetchKeys();
+            if (!fetched.isEmpty()) {
+                keys = fetched;
+                keysFetchedAt = now;
+            }
             key = keys.get(keyId);
         }
         if (key == null) {
@@ -117,10 +122,10 @@ public class AppleIdentityVerifier {
             return result;
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            return keys;
+            return Map.of();
         } catch (Exception ex) {
             log.warn("Could not fetch Apple signing keys: {}", ex.getMessage());
-            return keys;
+            return Map.of();
         }
     }
 }
