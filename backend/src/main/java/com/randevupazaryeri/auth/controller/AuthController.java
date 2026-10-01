@@ -33,6 +33,12 @@ public class AuthController {
         return ApiResponse.ok(authService.login(request));
     }
 
+    @PostMapping("/apple")
+    @Operation(summary = "Sign in (or sign up) with an Apple identity token")
+    public ApiResponse<AuthResponse> apple(@Valid @RequestBody AppleLoginRequest request) {
+        return ApiResponse.ok(authService.loginWithApple(request));
+    }
+
     @PostMapping("/check-email")
     @Operation(summary = "Check whether an email is already registered")
     public ApiResponse<EmailLookupResponse> checkEmail(@Valid @RequestBody EmailLookupRequest request) {

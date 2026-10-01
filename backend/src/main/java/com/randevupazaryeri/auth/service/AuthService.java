@@ -4,6 +4,7 @@ import com.randevupazaryeri.auth.dto.*;
 import com.randevupazaryeri.auth.entity.RefreshToken;
 import com.randevupazaryeri.auth.repository.RefreshTokenRepository;
 import com.randevupazaryeri.auth.security.JwtService;
+import com.randevupazaryeri.auth.security.AppleIdentityVerifier;
 import com.randevupazaryeri.common.exception.BusinessRuleException;
 import com.randevupazaryeri.common.exception.UnauthorizedException;
 import com.randevupazaryeri.common.security.SecurityUtils;
@@ -27,6 +28,7 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -40,6 +42,7 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final AuthenticationManager authenticationManager;
     private final UserService userService;
+    private final AppleIdentityVerifier appleIdentityVerifier;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
@@ -72,6 +75,46 @@ public class AuthService {
             throw new UnauthorizedException("Account is inactive");
         }
         return issueTokens(user);
+    }
+
+    /**
+     * Signs in with an Apple identity token. Existing accounts are matched by Apple id, then by
+     * Apple-verified email (linking the two); otherwise a new account is created with {@code role}.
+     */
+    @Transactional
+    public AuthResponse loginWithApple(AppleLoginRequest request) {
+        Role role = request.getRole() == null ? Role.CUSTOMER : request.getRole();
+        if (role != Role.CUSTOMER && role != Role.PROVIDER) {
+            throw new BusinessRuleException("Only CUSTOMER or PROVIDER roles can register");
+        }
+        AppleIdentityVerifier.AppleIdentity identity = appleIdentityVerifier.verify(request.getIdentityToken());
+        User user = userRepository.findByAppleUserId(identity.subject())
+                .or(() -> identity.email() != null && identity.emailVerified()
+                        ? userRepository.findByEmailIgnoreCase(identity.email())
+                        : Optional.empty())
+                .orElseGet(() -> newAppleUser(identity, request, role));
+        if (!user.isActive()) {
+            throw new UnauthorizedException("Account is inactive");
+        }
+        user.setAppleUserId(identity.subject());
+        userRepository.save(user);
+        return issueTokens(user);
+    }
+
+    private User newAppleUser(AppleIdentityVerifier.AppleIdentity identity, AppleLoginRequest request, Role role) {
+        String email = identity.email() != null
+                ? identity.email().trim().toLowerCase()
+                : identity.subject().replaceAll("[^A-Za-z0-9]", "").toLowerCase() + "@appleid.rezplz.app";
+        String firstName = blankToNull(request.getFirstName());
+        String lastName = blankToNull(request.getLastName());
+        return User.builder()
+                .firstName(firstName != null ? firstName : "rezplz")
+                .lastName(lastName != null ? lastName : "Kullanıcısı")
+                .email(email)
+                .passwordHash(passwordEncoder.encode(generateRawRefreshToken()))
+                .role(role)
+                .isActive(true)
+                .build();
     }
 
     @Transactional
