@@ -117,6 +117,20 @@ public class AuthService {
                 .build();
     }
 
+    /**
+     * Turns a customer account into a business account. Business accounts keep every customer
+     * capability, so the same login works in both apps. Tokens are reissued because they carry the role.
+     */
+    @Transactional
+    public AuthResponse upgradeToProvider() {
+        User user = userService.getById(SecurityUtils.currentUserId());
+        if (user.getRole() == Role.CUSTOMER) {
+            user.setRole(Role.PROVIDER);
+            userRepository.save(user);
+        }
+        return issueTokens(user);
+    }
+
     @Transactional
     public AuthResponse refresh(RefreshRequest request) {
         String hash = hashToken(request.getRefreshToken());

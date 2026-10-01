@@ -51,6 +51,13 @@ public class AuthController {
         return ApiResponse.ok(authService.refresh(request));
     }
 
+    @PostMapping("/upgrade-to-provider")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Turn my customer account into a business account (keeps customer features)")
+    public ApiResponse<AuthResponse> upgradeToProvider() {
+        return ApiResponse.ok(authService.upgradeToProvider());
+    }
+
     @PostMapping("/logout")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Logout and revoke refresh tokens")

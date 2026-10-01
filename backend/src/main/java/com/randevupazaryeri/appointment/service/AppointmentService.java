@@ -63,9 +63,6 @@ public class AppointmentService {
     @Transactional
     public AppointmentResponse create(CreateAppointmentRequest request) {
         var principal = SecurityUtils.currentPrincipal();
-        if (principal.getRole() != Role.CUSTOMER && principal.getRole() != Role.ADMIN) {
-            throw new ForbiddenException("Only customers can book appointments");
-        }
         Business business = ownershipService.getBusiness(request.getBusinessId());
         if (business.getStatus() != BusinessStatus.ACTIVE) {
             throw new InvalidAppointmentException("Business is not active");
@@ -84,6 +81,9 @@ public class AppointmentService {
                 .orElseThrow(() -> new InvalidAppointmentException("Employee not found in business"));
         if (!employee.isActive()) {
             throw new InvalidAppointmentException("Employee is inactive");
+        }
+        if (employee.getUser() != null && employee.getUser().getId().equals(principal.getId())) {
+            throw new InvalidAppointmentException("You cannot book an appointment with yourself");
         }
         if (services.stream().anyMatch(service -> !employeeRepository.providesService(employee.getId(), service.getId()))) {
             throw new InvalidAppointmentException("Employee does not provide every selected service");
@@ -124,10 +124,7 @@ public class AppointmentService {
         }
 
         boolean pending = status == AppointmentStatus.PENDING;
-        notificationService.notifyUser(business.getOwner().getId(), "APPOINTMENT_CREATED",
-                pending ? "Yeni randevu talebi" : "Yeni randevu",
-                String.join(" · ", fullName(appointment.getCustomer()), serviceSummary(appointment), when(appointment)),
-                PushApp.PARTNER, pushData(appointment, "APPOINTMENT_CREATED"));
+        notifyBusinessSide(appointment, "APPOINTMENT_CREATED", pending ? "Yeni randevu talebi" : "Yeni randevu");
         notificationService.notifyUser(principal.getId(), "APPOINTMENT_CREATED",
                 pending ? "Randevu talebin gönderildi" : "Randevun oluşturuldu",
                 business.getName() + " · " + when(appointment));
@@ -153,9 +150,12 @@ public class AppointmentService {
 
     @Transactional(readOnly = true)
     public Page<AppointmentResponse> businessAppointments(UUID businessId, Pageable pageable) {
-        ownershipService.requireOwnedBusiness(businessId);
-        return appointmentRepository.findByBusinessIdOrderByStartDateTimeDesc(businessId, pageable)
-                .map(AppointmentMapper::toResponse);
+        var access = ownershipService.requireMember(businessId);
+        Page<Appointment> page = access.isOwner()
+                ? appointmentRepository.findByBusinessIdOrderByStartDateTimeDesc(businessId, pageable)
+                : appointmentRepository.findByBusinessIdAndEmployeeIdOrderByStartDateTimeDesc(
+                        businessId, access.staff().getId(), pageable);
+        return page.map(AppointmentMapper::toResponse);
     }
 
     @Transactional
@@ -165,8 +165,10 @@ public class AppointmentService {
         boolean isCustomer = appointment.getCustomer().getId().equals(principal.getId());
         boolean isOwner = appointment.getBusiness().getOwner().getId().equals(principal.getId());
         boolean isAdmin = principal.getRole() == Role.ADMIN;
+        User staffUser = appointment.getEmployee().getUser();
+        boolean isStaff = staffUser != null && staffUser.getId().equals(principal.getId());
 
-        if (!isCustomer && !isOwner && !isAdmin) {
+        if (!isCustomer && !isOwner && !isStaff && !isAdmin) {
             throw new ForbiddenException("Not allowed to cancel this appointment");
         }
         if (appointment.getStatus() == AppointmentStatus.CANCELLED
@@ -188,10 +190,7 @@ public class AppointmentService {
         appointment.setCancellationReason(reason);
 
         if (isCustomer) {
-            notificationService.notifyUser(appointment.getBusiness().getOwner().getId(), "APPOINTMENT_CANCELLED",
-                    "Randevu iptal edildi",
-                    String.join(" · ", fullName(appointment.getCustomer()), serviceSummary(appointment), when(appointment)),
-                    PushApp.PARTNER, pushData(appointment, "APPOINTMENT_CANCELLED"));
+            notifyBusinessSide(appointment, "APPOINTMENT_CANCELLED", "Randevu iptal edildi");
         } else {
             String type = wasPending ? "APPOINTMENT_REJECTED" : "APPOINTMENT_CANCELLED";
             String body = appointment.getBusiness().getName() + " · " + when(appointment)
@@ -205,8 +204,7 @@ public class AppointmentService {
 
     @Transactional
     public AppointmentResponse confirm(UUID businessId, UUID id) {
-        ownershipService.requireOwnedBusiness(businessId);
-        Appointment appointment = getInBusiness(id, businessId);
+        Appointment appointment = getAccessible(id, businessId);
         if (appointment.getStatus() != AppointmentStatus.PENDING) {
             throw new InvalidAppointmentException("Only pending appointments can be confirmed");
         }
@@ -219,8 +217,7 @@ public class AppointmentService {
 
     @Transactional
     public AppointmentResponse complete(UUID businessId, UUID id) {
-        ownershipService.requireOwnedBusiness(businessId);
-        Appointment appointment = getInBusiness(id, businessId);
+        Appointment appointment = getAccessible(id, businessId);
         if (appointment.getStatus() != AppointmentStatus.CONFIRMED && appointment.getStatus() != AppointmentStatus.PENDING) {
             throw new InvalidAppointmentException("Appointment cannot be completed");
         }
@@ -233,8 +230,7 @@ public class AppointmentService {
 
     @Transactional
     public AppointmentResponse noShow(UUID businessId, UUID id) {
-        ownershipService.requireOwnedBusiness(businessId);
-        Appointment appointment = getInBusiness(id, businessId);
+        Appointment appointment = getAccessible(id, businessId);
         if (appointment.getStatus() != AppointmentStatus.CONFIRMED && appointment.getStatus() != AppointmentStatus.PENDING) {
             throw new InvalidAppointmentException("Appointment cannot be marked no-show");
         }
@@ -257,6 +253,27 @@ public class AppointmentService {
         if (!ok) {
             throw new InvalidAppointmentException("Outside employee working hours");
         }
+    }
+
+    /** Owners and staff only see their own appointments in the partner app, so both get notified. */
+    private void notifyBusinessSide(Appointment appointment, String type, String title) {
+        String body = String.join(" · ", fullName(appointment.getCustomer()), serviceSummary(appointment), when(appointment));
+        UUID ownerId = appointment.getBusiness().getOwner().getId();
+        notificationService.notifyUser(ownerId, type, title, body, PushApp.PARTNER, pushData(appointment, type));
+        User staff = appointment.getEmployee().getUser();
+        if (staff != null && !staff.getId().equals(ownerId)) {
+            notificationService.notifyUser(staff.getId(), type, title, body, PushApp.PARTNER, pushData(appointment, type));
+        }
+    }
+
+    /** Owners can act on any appointment of their business; staff only on their own. */
+    private Appointment getAccessible(UUID id, UUID businessId) {
+        var access = ownershipService.requireMember(businessId);
+        Appointment appointment = getInBusiness(id, businessId);
+        if (!access.canAccessEmployee(appointment.getEmployee().getId())) {
+            throw new ResourceNotFoundException("Appointment not found");
+        }
+        return appointment;
     }
 
     private static String fullName(User user) {

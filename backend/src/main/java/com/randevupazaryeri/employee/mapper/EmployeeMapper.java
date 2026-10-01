@@ -15,6 +15,7 @@ public final class EmployeeMapper {
                 .portfolioUrls(e.getPortfolioUrls() == null ? List.of() : List.copyOf(e.getPortfolioUrls()))
                 .languages(e.getLanguages() == null ? List.of() : List.copyOf(e.getLanguages()))
                 .isActive(e.isActive())
+                .accountLinked(e.getUser() != null)
                 .serviceIds(e.getServices().stream().map(ServiceOffer::getId).toList())
                 .build();
     }

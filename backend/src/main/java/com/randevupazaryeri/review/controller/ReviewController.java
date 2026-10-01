@@ -27,7 +27,7 @@ public class ReviewController {
 
     @PostMapping("/api/v1/reviews")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('CUSTOMER')")
+    @PreAuthorize("hasAnyRole('CUSTOMER','PROVIDER')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Create review for completed appointment")
     public ApiResponse<ReviewResponse> create(@Valid @RequestBody CreateReviewRequest request) {

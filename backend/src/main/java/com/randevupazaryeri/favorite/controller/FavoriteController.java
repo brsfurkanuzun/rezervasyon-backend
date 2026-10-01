@@ -19,7 +19,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Tag(name = "Favorites")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasRole('CUSTOMER')")
+@PreAuthorize("hasAnyRole('CUSTOMER','PROVIDER')")
 public class FavoriteController {
     private final FavoriteService favoriteService;
 

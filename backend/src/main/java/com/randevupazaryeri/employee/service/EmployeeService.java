@@ -2,6 +2,7 @@ package com.randevupazaryeri.employee.service;
 
 import com.randevupazaryeri.business.service.BusinessOwnershipService;
 import com.randevupazaryeri.common.exception.BusinessRuleException;
+import com.randevupazaryeri.common.exception.ForbiddenException;
 import com.randevupazaryeri.common.exception.ResourceNotFoundException;
 import com.randevupazaryeri.employee.dto.*;
 import com.randevupazaryeri.employee.entity.Employee;
@@ -103,7 +104,7 @@ public class EmployeeService {
 
     @Transactional
     public TimeOffResponse addTimeOff(UUID businessId, UUID employeeId, TimeOffRequest request) {
-        ownershipService.requireOwnedBusiness(businessId);
+        requireSelfOrOwner(businessId, employeeId);
         Employee employee = getInBusiness(employeeId, businessId);
         if (!request.getStartAt().isBefore(request.getEndAt())) {
             throw new BusinessRuleException("startAt must be before endAt");
@@ -118,7 +119,7 @@ public class EmployeeService {
 
     @Transactional(readOnly = true)
     public List<TimeOffResponse> listTimeOffs(UUID businessId, UUID employeeId) {
-        ownershipService.requireOwnedBusiness(businessId);
+        requireSelfOrOwner(businessId, employeeId);
         getInBusiness(employeeId, businessId);
         return timeOffRepository.findByEmployeeId(employeeId).stream()
                 .map(t -> TimeOffResponse.builder().id(t.getId()).title(t.getTitle())
@@ -128,7 +129,7 @@ public class EmployeeService {
 
     @Transactional
     public void deleteTimeOff(UUID businessId, UUID employeeId, UUID timeOffId) {
-        ownershipService.requireOwnedBusiness(businessId);
+        requireSelfOrOwner(businessId, employeeId);
         getInBusiness(employeeId, businessId);
         TimeOff timeOff = timeOffRepository.findById(timeOffId)
                 .orElseThrow(() -> new ResourceNotFoundException("Time off not found"));
@@ -155,5 +156,12 @@ public class EmployeeService {
     private Employee getInBusiness(UUID employeeId, UUID businessId) {
         return employeeRepository.findByIdAndBusinessId(employeeId, businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+    }
+
+    /** Owners manage every employee; linked staff may manage their own time off. */
+    private void requireSelfOrOwner(UUID businessId, UUID employeeId) {
+        if (!ownershipService.requireMember(businessId).canAccessEmployee(employeeId)) {
+            throw new ForbiddenException("You can only manage your own schedule");
+        }
     }
 }

@@ -19,4 +19,6 @@ public class EmployeeResponse {
     private List<UUID> serviceIds;
     private Double averageRating;
     private long reviewCount;
+    /** Whether a staff account has accepted an invitation for this profile. */
+    private boolean accountLinked;
 }

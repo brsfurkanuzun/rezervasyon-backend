@@ -29,14 +29,14 @@ public class AppointmentController {
 
     @PostMapping("/appointments")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('CUSTOMER','ADMIN')")
+    @PreAuthorize("hasAnyRole('CUSTOMER','PROVIDER','ADMIN')")
     @Operation(summary = "Create appointment")
     public ApiResponse<AppointmentResponse> create(@Valid @RequestBody CreateAppointmentRequest request) {
         return ApiResponse.ok(appointmentService.create(request));
     }
 
     @GetMapping("/appointments/my")
-    @PreAuthorize("hasAnyRole('CUSTOMER','ADMIN')")
+    @PreAuthorize("hasAnyRole('CUSTOMER','PROVIDER','ADMIN')")
     @Operation(summary = "My appointments")
     public ApiResponse<List<AppointmentResponse>> my(@PageableDefault(size = 20) Pageable pageable) {
         Page<AppointmentResponse> page = appointmentService.myAppointments(pageable);

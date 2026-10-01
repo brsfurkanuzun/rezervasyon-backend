@@ -13,6 +13,7 @@ import com.randevupazaryeri.common.exception.ResourceNotFoundException;
 import com.randevupazaryeri.common.security.SecurityUtils;
 import com.randevupazaryeri.employee.dto.EmployeeResponse;
 import com.randevupazaryeri.employee.mapper.EmployeeMapper;
+import com.randevupazaryeri.employee.entity.Employee;
 import com.randevupazaryeri.employee.entity.WorkingHour;
 import com.randevupazaryeri.employee.repository.EmployeeRepository;
 import com.randevupazaryeri.employee.repository.WorkingHourRepository;
@@ -221,6 +222,30 @@ public class BusinessService {
     public List<BusinessSummaryResponse> myBusinesses() {
         UUID ownerId = SecurityUtils.currentUserId();
         return businessRepository.findByOwnerId(ownerId).stream().map(this::toSummary).toList();
+    }
+
+    /** Owned businesses first, then businesses where the caller is linked staff. */
+    @Transactional(readOnly = true)
+    public List<WorkplaceResponse> myWorkplaces() {
+        UUID userId = SecurityUtils.currentUserId();
+        Map<UUID, UUID> staffSeats = new LinkedHashMap<>();
+        for (Employee e : employeeRepository.findByUserIdAndIsActiveTrue(userId)) {
+            staffSeats.put(e.getBusiness().getId(), e.getId());
+        }
+        List<WorkplaceResponse> result = new ArrayList<>();
+        for (Business b : businessRepository.findByOwnerId(userId)) {
+            result.add(WorkplaceResponse.builder()
+                    .business(toSummary(b)).role(WorkplaceResponse.Role.OWNER)
+                    .employeeId(staffSeats.remove(b.getId())).build());
+        }
+        for (Employee e : employeeRepository.findByUserIdAndIsActiveTrue(userId)) {
+            if (staffSeats.containsKey(e.getBusiness().getId())) {
+                result.add(WorkplaceResponse.builder()
+                        .business(toSummary(e.getBusiness())).role(WorkplaceResponse.Role.STAFF)
+                        .employeeId(e.getId()).build());
+            }
+        }
+        return result;
     }
 
     @Transactional

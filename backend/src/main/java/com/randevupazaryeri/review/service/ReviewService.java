@@ -7,6 +7,7 @@ import com.randevupazaryeri.common.exception.BusinessRuleException;
 import com.randevupazaryeri.common.exception.ForbiddenException;
 import com.randevupazaryeri.common.exception.ResourceNotFoundException;
 import com.randevupazaryeri.common.security.SecurityUtils;
+import com.randevupazaryeri.employee.repository.EmployeeRepository;
 import com.randevupazaryeri.review.dto.CreateReviewRequest;
 import com.randevupazaryeri.review.dto.ReviewResponse;
 import com.randevupazaryeri.review.entity.Review;
@@ -25,6 +26,7 @@ import java.util.UUID;
 public class ReviewService {
     private final ReviewRepository reviewRepository;
     private final AppointmentRepository appointmentRepository;
+    private final EmployeeRepository employeeRepository;
 
     @Transactional
     public ReviewResponse create(CreateReviewRequest request) {
@@ -33,6 +35,11 @@ public class ReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
         if (!appointment.getCustomer().getId().equals(customerId)) {
             throw new ForbiddenException("You can only review your own appointments");
+        }
+        UUID businessId = appointment.getBusiness().getId();
+        if (appointment.getBusiness().getOwner().getId().equals(customerId)
+                || employeeRepository.existsByBusinessIdAndUserId(businessId, customerId)) {
+            throw new BusinessRuleException("You cannot review a business you own or work at");
         }
         if (appointment.getStatus() != AppointmentStatus.COMPLETED) {
             throw new BusinessRuleException("Only completed appointments can be reviewed");

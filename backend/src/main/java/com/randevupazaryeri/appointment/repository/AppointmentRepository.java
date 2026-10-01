@@ -18,6 +18,8 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
 
     Page<Appointment> findByBusinessIdOrderByStartDateTimeDesc(UUID businessId, Pageable pageable);
 
+    Page<Appointment> findByBusinessIdAndEmployeeIdOrderByStartDateTimeDesc(UUID businessId, UUID employeeId, Pageable pageable);
+
     @Query("""
         select a from Appointment a
         where a.employee.id = :employeeId
