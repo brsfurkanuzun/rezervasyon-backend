@@ -4,8 +4,8 @@ spring:
 
   datasource:
     url: jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDATABASE}
-    username: ${DATABASE_USERNAME:randevu}
-    password: ${DATABASE_PASSWORD:randevu}
+    username: ${PGUSER:randevu}
+    password: ${PGPASSWORD:randevu}
 
   jpa:
     hibernate:
