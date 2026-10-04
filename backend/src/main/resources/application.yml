@@ -76,6 +76,10 @@ app:
   appointment:
     customer-cancellation-deadline-hours: 2
 
+  google:
+    web-client-id: ${GOOGLE_WEB_CLIENT_ID:}
+    extra-client-ids: ${GOOGLE_EXTRA_CLIENT_IDS:}
+
   apns:
     team-id: ${APNS_TEAM_ID:}
     key-id: ${APNS_KEY_ID:}

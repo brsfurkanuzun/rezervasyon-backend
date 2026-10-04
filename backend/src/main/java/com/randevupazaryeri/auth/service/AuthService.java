@@ -5,6 +5,8 @@ import com.randevupazaryeri.auth.entity.RefreshToken;
 import com.randevupazaryeri.auth.repository.RefreshTokenRepository;
 import com.randevupazaryeri.auth.security.JwtService;
 import com.randevupazaryeri.auth.security.AppleIdentityVerifier;
+import com.randevupazaryeri.auth.security.GoogleIdentityVerifier;
+import com.randevupazaryeri.config.GoogleProperties;
 import com.randevupazaryeri.common.exception.BusinessRuleException;
 import com.randevupazaryeri.common.exception.UnauthorizedException;
 import com.randevupazaryeri.common.security.SecurityUtils;
@@ -43,6 +45,8 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final UserService userService;
     private final AppleIdentityVerifier appleIdentityVerifier;
+    private final GoogleIdentityVerifier googleIdentityVerifier;
+    private final GoogleProperties googleProperties;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
@@ -109,6 +113,59 @@ public class AuthService {
         String lastName = blankToNull(request.getLastName());
         return User.builder()
                 .firstName(firstName != null ? firstName : "rezplz")
+                .lastName(lastName != null ? lastName : "Kullanıcısı")
+                .email(email)
+                .passwordHash(passwordEncoder.encode(generateRawRefreshToken()))
+                .role(role)
+                .isActive(true)
+                .build();
+    }
+
+    /**
+     * Signs in with a Google ID token. Existing accounts are matched by Google id, then by email when
+     * Google is authoritative for it (linking the two); otherwise a new account is created with {@code role}.
+     */
+    @Transactional
+    public AuthResponse loginWithGoogle(GoogleLoginRequest request) {
+        Role role = request.getRole() == null ? Role.CUSTOMER : request.getRole();
+        if (role != Role.CUSTOMER && role != Role.PROVIDER) {
+            throw new BusinessRuleException("Only CUSTOMER or PROVIDER roles can register");
+        }
+        GoogleIdentityVerifier.GoogleIdentity identity = googleIdentityVerifier.verify(request.getIdToken());
+        if (identity.email() == null || !identity.emailVerified()) {
+            throw new UnauthorizedException("Google account email is not verified");
+        }
+        String email = identity.email().trim().toLowerCase();
+        User user = userRepository.findByGoogleUserId(identity.subject())
+                .orElseGet(() -> userRepository.findByEmailIgnoreCase(email)
+                        .map(existing -> {
+                            if (!identity.emailIsAuthoritative()) {
+                                throw new BusinessRuleException(
+                                        "An account with this email already exists. Sign in with your password.");
+                            }
+                            return existing;
+                        })
+                        .orElseGet(() -> newGoogleUser(identity, email, role)));
+        if (!user.isActive()) {
+            throw new UnauthorizedException("Account is inactive");
+        }
+        user.setGoogleUserId(identity.subject());
+        userRepository.save(user);
+        return issueTokens(user);
+    }
+
+    public GoogleConfigResponse googleConfig() {
+        String clientId = googleProperties.getWebClientId();
+        return GoogleConfigResponse.builder()
+                .clientId(clientId == null || clientId.isBlank() ? null : clientId.trim())
+                .build();
+    }
+
+    private User newGoogleUser(GoogleIdentityVerifier.GoogleIdentity identity, String email, Role role) {
+        String firstName = truncate(blankToNull(identity.firstName()), 100);
+        String lastName = truncate(blankToNull(identity.lastName()), 100);
+        return User.builder()
+                .firstName(firstName != null ? firstName : "ResPlz")
                 .lastName(lastName != null ? lastName : "Kullanıcısı")
                 .email(email)
                 .passwordHash(passwordEncoder.encode(generateRawRefreshToken()))
@@ -207,6 +264,10 @@ public class AuthService {
         } catch (Exception e) {
             throw new IllegalStateException("Unable to hash refresh token", e);
         }
+    }
+
+    private String truncate(String value, int max) {
+        return value == null || value.length() <= max ? value : value.substring(0, max);
     }
 
     private String blankToNull(String value) {

@@ -60,6 +60,8 @@ public class SecurityConfig {
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/apple",
+                                "/api/v1/auth/google",
+                                "/api/v1/auth/google/config",
                                 "/api/v1/auth/check-email",
                                 "/api/v1/auth/refresh",
                                 "/swagger-ui/**",

@@ -51,6 +51,10 @@ public class User {
     @Column(name = "apple_user_id")
     private String appleUserId;
 
+    /** Stable "sub" claim from Google Sign-In. */
+    @Column(name = "google_user_id")
+    private String googleUserId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private Role role;

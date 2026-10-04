@@ -39,6 +39,18 @@ public class AuthController {
         return ApiResponse.ok(authService.loginWithApple(request));
     }
 
+    @PostMapping("/google")
+    @Operation(summary = "Sign in (or sign up) with a Google ID token")
+    public ApiResponse<AuthResponse> google(@Valid @RequestBody GoogleLoginRequest request) {
+        return ApiResponse.ok(authService.loginWithGoogle(request));
+    }
+
+    @GetMapping("/google/config")
+    @Operation(summary = "Public Google sign-in configuration for the websites")
+    public ApiResponse<GoogleConfigResponse> googleConfig() {
+        return ApiResponse.ok(authService.googleConfig());
+    }
+
     @PostMapping("/check-email")
     @Operation(summary = "Check whether an email is already registered")
     public ApiResponse<EmailLookupResponse> checkEmail(@Valid @RequestBody EmailLookupRequest request) {
