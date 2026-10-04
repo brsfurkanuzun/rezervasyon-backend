@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -16,7 +17,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,15 +31,9 @@ public class BusinessController {
     @GetMapping
     @Operation(summary = "Search businesses")
     public ApiResponse<List<BusinessSummaryResponse>> search(
-            @RequestParam(required = false) String query,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) String city,
-            @RequestParam(required = false) String district,
-            @RequestParam(required = false) BigDecimal minPrice,
-            @RequestParam(required = false) BigDecimal maxPrice,
-            @RequestParam(required = false) Double rating,
+            @ParameterObject @ModelAttribute BusinessSearchFilter filter,
             @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
-        Page<BusinessSummaryResponse> page = businessService.search(query, category, city, district, minPrice, maxPrice, rating, pageable);
+        Page<BusinessSummaryResponse> page = businessService.search(filter, pageable);
         return ApiResponse.ofPage(page);
     }
 

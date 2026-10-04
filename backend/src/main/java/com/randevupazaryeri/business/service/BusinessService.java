@@ -25,10 +25,19 @@ import com.randevupazaryeri.serviceoffer.mapper.ServiceMapper;
 import com.randevupazaryeri.serviceoffer.repository.ServiceOfferRepository;
 import com.randevupazaryeri.user.entity.Role;
 import com.randevupazaryeri.user.service.UserService;
+import com.randevupazaryeri.review.entity.Review;
+import com.randevupazaryeri.serviceoffer.entity.ServiceOffer;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -155,33 +164,87 @@ public class BusinessService {
     }
 
     @Transactional(readOnly = true)
-    public Page<BusinessSummaryResponse> search(String query, String category, String city, String district,
-                                                BigDecimal minPrice, BigDecimal maxPrice, Double rating,
-                                                Pageable pageable) {
+    public Page<BusinessSummaryResponse> search(BusinessSearchFilter f, Pageable pageable) {
+        boolean byDistance = "distance".equals(f.sortBy()) && f.hasOrigin();
+        boolean byRating = "rating".equals(f.sortBy());
         Specification<Business> spec = (root, cq, cb) -> {
             List<Predicate> preds = new ArrayList<>();
             preds.add(cb.equal(root.get("status"), BusinessStatus.ACTIVE));
-            if (query != null && !query.isBlank()) {
-                String like = "%" + query.toLowerCase() + "%";
+            if (f.query() != null && !f.query().isBlank()) {
+                String like = "%" + f.query().toLowerCase(Locale.ROOT) + "%";
                 preds.add(cb.or(
                         cb.like(cb.lower(root.get("name")), like),
                         cb.like(cb.lower(root.get("description")), like)
                 ));
             }
-            if (city != null && !city.isBlank()) {
-                preds.add(cb.equal(cb.lower(root.get("city")), city.toLowerCase()));
+            if (f.city() != null && !f.city().isBlank()) {
+                preds.add(cb.equal(cb.lower(root.get("city")), f.city().toLowerCase(Locale.ROOT)));
             }
-            if (district != null && !district.isBlank()) {
-                preds.add(cb.equal(cb.lower(root.get("district")), district.toLowerCase()));
+            if (f.district() != null && !f.district().isBlank()) {
+                preds.add(cb.equal(cb.lower(root.get("district")), f.district().toLowerCase(Locale.ROOT)));
             }
-            if (category != null && !category.isBlank()) {
-                Join<Object, Object> cats = root.join("categories");
-                preds.add(cb.equal(cats.get("code"), category.toUpperCase()));
+            if (f.category() != null && !f.category().isBlank()) {
+                Subquery<UUID> inCategory = cq.subquery(UUID.class);
+                Root<Business> self = inCategory.correlate(root);
+                Join<Business, Category> cats = self.join("categories");
+                inCategory.select(cats.get("id")).where(cb.equal(cats.get("code"), f.category().toUpperCase(Locale.ROOT)));
+                preds.add(cb.exists(inCategory));
             }
-            cq.distinct(true);
+            if (f.hasBounds()) {
+                preds.add(cb.between(root.get("latitude"), Math.min(f.minLat(), f.maxLat()), Math.max(f.minLat(), f.maxLat())));
+                Path<Double> lng = root.get("longitude");
+                preds.add(f.minLng() <= f.maxLng()
+                        ? cb.between(lng, f.minLng(), f.maxLng())
+                        : cb.or(cb.ge(lng, f.minLng()), cb.le(lng, f.maxLng())));
+            }
+            if (f.minPrice() != null) {
+                preds.add(cb.ge(startingPrice(root, cq, cb), f.minPrice()));
+            }
+            if (f.maxPrice() != null) {
+                Subquery<BigDecimal> starting = startingPrice(root, cq, cb);
+                preds.add(cb.or(cb.isNull(starting), cb.le(starting, f.maxPrice())));
+            }
+            if (f.rating() != null) {
+                preds.add(cb.ge(averageRating(root, cq, cb), f.rating()));
+            }
+
+            boolean countQuery = Long.class.equals(cq.getResultType()) || long.class.equals(cq.getResultType());
+            if (!countQuery && byDistance) {
+                double lngScale = Math.cos(Math.toRadians(f.lat()));
+                Expression<Double> dLat = cb.diff(root.get("latitude"), f.lat());
+                Expression<Double> dLng = cb.prod(cb.diff(root.<Double>get("longitude"), f.lng()), lngScale);
+                cq.orderBy(cb.asc(cb.sum(cb.prod(dLat, dLat), cb.prod(dLng, dLng))), cb.asc(root.get("name")));
+            } else if (!countQuery && byRating) {
+                Subquery<Long> reviews = cq.subquery(Long.class);
+                Root<Review> r = reviews.from(Review.class);
+                reviews.select(cb.count(r)).where(cb.equal(r.get("business"), root));
+                cq.orderBy(cb.desc(cb.coalesce(averageRating(root, cq, cb), 0.0)), cb.desc(reviews), cb.asc(root.get("name")));
+            }
             return cb.and(preds.toArray(new Predicate[0]));
         };
-        return businessRepository.findAll(spec, pageable).map(this::toSummary);
+        Pageable paging = byDistance || byRating ? PageRequest.of(pageable.getPageNumber(), pageable.getPageSize()) : pageable;
+        return businessRepository.findAll(spec, paging).map(b -> {
+            BusinessSummaryResponse summary = toSummary(b);
+            if (f.hasOrigin() && b.getLatitude() != null && b.getLongitude() != null) {
+                double km = distanceKm(f.lat(), f.lng(), b.getLatitude(), b.getLongitude());
+                summary.setDistanceKm(Math.round(km * 10) / 10.0);
+            }
+            return summary;
+        });
+    }
+
+    private static Subquery<BigDecimal> startingPrice(Root<Business> root, CriteriaQuery<?> cq, CriteriaBuilder cb) {
+        Subquery<BigDecimal> sq = cq.subquery(BigDecimal.class);
+        Root<ServiceOffer> s = sq.from(ServiceOffer.class);
+        sq.select(cb.min(s.get("price"))).where(cb.equal(s.get("business"), root), cb.isTrue(s.get("isActive")));
+        return sq;
+    }
+
+    private static Subquery<Double> averageRating(Root<Business> root, CriteriaQuery<?> cq, CriteriaBuilder cb) {
+        Subquery<Double> sq = cq.subquery(Double.class);
+        Root<Review> r = sq.from(Review.class);
+        sq.select(cb.avg(r.get("rating"))).where(cb.equal(r.get("business"), root));
+        return sq;
     }
 
     @Transactional(readOnly = true)
