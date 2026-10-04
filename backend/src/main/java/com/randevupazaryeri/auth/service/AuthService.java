@@ -6,6 +6,7 @@ import com.randevupazaryeri.auth.repository.RefreshTokenRepository;
 import com.randevupazaryeri.auth.security.JwtService;
 import com.randevupazaryeri.auth.security.AppleIdentityVerifier;
 import com.randevupazaryeri.auth.security.GoogleIdentityVerifier;
+import com.randevupazaryeri.config.AppleProperties;
 import com.randevupazaryeri.config.GoogleProperties;
 import com.randevupazaryeri.common.exception.BusinessRuleException;
 import com.randevupazaryeri.common.exception.UnauthorizedException;
@@ -45,6 +46,7 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final UserService userService;
     private final AppleIdentityVerifier appleIdentityVerifier;
+    private final AppleProperties appleProperties;
     private final GoogleIdentityVerifier googleIdentityVerifier;
     private final GoogleProperties googleProperties;
     private final SecureRandom secureRandom = new SecureRandom();
@@ -152,6 +154,13 @@ public class AuthService {
         user.setGoogleUserId(identity.subject());
         userRepository.save(user);
         return issueTokens(user);
+    }
+
+    public AppleConfigResponse appleConfig() {
+        String serviceId = appleProperties.getWebServiceId();
+        return AppleConfigResponse.builder()
+                .clientId(serviceId == null || serviceId.isBlank() ? null : serviceId.trim())
+                .build();
     }
 
     public GoogleConfigResponse googleConfig() {

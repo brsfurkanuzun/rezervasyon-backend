@@ -76,6 +76,9 @@ app:
   appointment:
     customer-cancellation-deadline-hours: 2
 
+  apple:
+    web-service-id: ${APPLE_WEB_SERVICE_ID:}
+
   google:
     web-client-id: ${GOOGLE_WEB_CLIENT_ID:}
     extra-client-ids: ${GOOGLE_EXTRA_CLIENT_IDS:}

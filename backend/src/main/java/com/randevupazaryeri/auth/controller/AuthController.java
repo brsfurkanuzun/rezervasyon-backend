@@ -39,6 +39,12 @@ public class AuthController {
         return ApiResponse.ok(authService.loginWithApple(request));
     }
 
+    @GetMapping("/apple/config")
+    @Operation(summary = "Public Sign in with Apple configuration for the websites")
+    public ApiResponse<AppleConfigResponse> appleConfig() {
+        return ApiResponse.ok(authService.appleConfig());
+    }
+
     @PostMapping("/google")
     @Operation(summary = "Sign in (or sign up) with a Google ID token")
     public ApiResponse<AuthResponse> google(@Valid @RequestBody GoogleLoginRequest request) {

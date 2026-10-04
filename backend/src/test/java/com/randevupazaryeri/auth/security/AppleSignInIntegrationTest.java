@@ -24,6 +24,7 @@ import java.util.Date;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -32,10 +33,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class AppleSignInIntegrationTest {
+    private static final String WEB_SERVICE_ID = "com.example.web.test";
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry registry) {
         PostgresTestSupport.registerDatasource(registry);
+        registry.add("app.apple.web-service-id", () -> WEB_SERVICE_ID);
     }
 
     @Autowired MockMvc mockMvc;
@@ -66,6 +69,17 @@ class AppleSignInIntegrationTest {
         JsonNode second = signIn(token("apple-sub-new", null, "com.rezplz.rezplz", appleKey), "");
         assertThat(second.path("user").path("id").asText()).isEqualTo(first.path("user").path("id").asText());
         assertThat(second.path("user").path("lastName").asText()).isEqualTo("Yılmaz");
+    }
+
+    @Test
+    void exposesTheWebServiceIdAndAcceptsTokensIssuedForIt() throws Exception {
+        mockMvc.perform(get("/api/v1/auth/apple/config"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.clientId").value(WEB_SERVICE_ID));
+
+        JsonNode iosUser = signIn(token("apple-sub-new", "apple-new@test.com", "com.rezplz.rezplz", appleKey), "");
+        JsonNode webUser = signIn(token("apple-sub-new", null, WEB_SERVICE_ID, appleKey), "");
+        assertThat(webUser.path("user").path("id").asText()).isEqualTo(iosUser.path("user").path("id").asText());
     }
 
     @Test

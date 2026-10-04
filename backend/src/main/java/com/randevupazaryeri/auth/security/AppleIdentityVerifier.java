@@ -54,7 +54,7 @@ public class AppleIdentityVerifier {
             throw new UnauthorizedException("Invalid Apple identity token");
         }
         Set<String> audience = claims.getAudience();
-        if (audience == null || audience.stream().noneMatch(properties.getAudiences()::contains)) {
+        if (audience == null || audience.stream().noneMatch(properties.allowedAudiences()::contains)) {
             log.warn("Rejected Apple identity token for audience {}", audience);
             throw new UnauthorizedException("Apple identity token was issued for another app");
         }
