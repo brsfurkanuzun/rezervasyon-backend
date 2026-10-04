@@ -14,4 +14,5 @@ public class ServiceResponse {
     private BigDecimal price;
     private String currency;
     private boolean isActive;
+    private String imageUrl;
 }

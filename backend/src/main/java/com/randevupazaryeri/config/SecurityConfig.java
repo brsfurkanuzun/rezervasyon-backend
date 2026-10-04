@@ -73,6 +73,7 @@ public class SecurityConfig {
                                 "/api/v1/businesses/{slug}/nearby",
                                 "/api/v1/businesses/{businessId}/availability",
                                 "/api/v1/businesses/{businessId}/reviews",
+                                "/api/v1/businesses/{businessId}/images",
                                 "/api/v1/categories",
                                 "/api/v1/categories/**"
                         ).permitAll()

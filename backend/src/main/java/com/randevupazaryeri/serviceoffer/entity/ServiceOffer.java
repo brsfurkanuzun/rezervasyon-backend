@@ -38,6 +38,9 @@ public class ServiceOffer {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
+    @Column(name = "image_url", columnDefinition = "TEXT")
+    private String imageUrl;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
     @Column(name = "updated_at", nullable = false)

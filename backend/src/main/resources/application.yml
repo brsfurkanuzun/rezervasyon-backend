@@ -2,6 +2,16 @@ spring:
   application:
     name: randevu-backend
 
+  # Local development only: a backend/.env file (never committed) can provide secrets. Railway uses Variables.
+  config:
+    import: optional:file:.env[.properties]
+
+  servlet:
+    multipart:
+      max-file-size: ${UPLOAD_MAX_FILE_SIZE:5MB}
+      # Slightly above the file limit so the multipart envelope fits; the file itself is still capped.
+      max-request-size: ${UPLOAD_MAX_REQUEST_SIZE:6MB}
+
   datasource:
     url: jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDATABASE}
     username: ${PGUSER:randevu}
@@ -33,6 +43,9 @@ spring:
 
 server:
   port: ${PORT:${SERVER_PORT:8080}}
+  tomcat:
+    # Let Tomcat read (and discard) moderately oversized uploads so clients receive the 413 JSON error.
+    max-swallow-size: 20MB
 
 
 management:
@@ -49,7 +62,16 @@ app:
     refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
 
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:3000,http://localhost:5174,http://127.0.0.1:5174}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:https://resplz.com,https://www.resplz.com,https://partner.resplz.com,http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:3000,http://localhost:5174,http://127.0.0.1:5174}
+
+  upload:
+    max-file-size: ${UPLOAD_MAX_FILE_SIZE:5MB}
+    root-folder: ${IMAGE_STORAGE_ROOT:resplz}
+    allow-avif: ${UPLOAD_ALLOW_AVIF:true}
+    max-pixels: 40000000
+    rate-limit:
+      max-uploads: ${UPLOAD_RATE_LIMIT_MAX:30}
+      window: ${UPLOAD_RATE_LIMIT_WINDOW:10m}
 
   appointment:
     customer-cancellation-deadline-hours: 2
@@ -66,6 +88,13 @@ app:
       private-key: ${APNS_CUSTOMER_PRIVATE_KEY:}
     customer-topic: ${APNS_CUSTOMER_TOPIC:com.rezplz.rezplz}
     partner-topic: ${APNS_PARTNER_TOPIC:com.rezplz.partner}
+
+
+# Server-side only. Never expose these to a frontend bundle.
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+  api-key: ${CLOUDINARY_API_KEY:}
+  api-secret: ${CLOUDINARY_API_SECRET:}
 
 
 springdoc:

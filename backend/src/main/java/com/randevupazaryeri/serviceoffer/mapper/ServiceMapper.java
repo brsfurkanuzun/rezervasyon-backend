@@ -9,6 +9,6 @@ public final class ServiceMapper {
         return ServiceResponse.builder()
                 .id(s.getId()).name(s.getName()).description(s.getDescription())
                 .durationMinutes(s.getDurationMinutes()).price(s.getPrice())
-                .currency(s.getCurrency()).isActive(s.isActive()).build();
+                .currency(s.getCurrency()).isActive(s.isActive()).imageUrl(s.getImageUrl()).build();
     }
 }
