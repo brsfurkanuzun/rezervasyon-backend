@@ -1,6 +1,7 @@
 package com.randevupazaryeri.business.controller;
 
 import com.randevupazaryeri.business.dto.*;
+import com.randevupazaryeri.business.service.BusinessDeletionService;
 import com.randevupazaryeri.business.service.BusinessService;
 import com.randevupazaryeri.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,6 +28,7 @@ import java.util.UUID;
 public class BusinessController {
 
     private final BusinessService businessService;
+    private final BusinessDeletionService businessDeletionService;
 
     @GetMapping
     @Operation(summary = "Search businesses")
@@ -67,4 +69,28 @@ public class BusinessController {
         return ApiResponse.ok(businessService.update(id, request));
     }
 
+    @PostMapping("/{id}/freeze")
+    @PreAuthorize("hasAnyRole('PROVIDER','ADMIN')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Freeze owned business: hidden from customers, no new bookings")
+    public ApiResponse<BusinessSummaryResponse> freeze(@PathVariable UUID id) {
+        return ApiResponse.ok(businessService.freeze(id));
+    }
+
+    @PostMapping("/{id}/unfreeze")
+    @PreAuthorize("hasAnyRole('PROVIDER','ADMIN')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Reactivate a frozen business")
+    public ApiResponse<BusinessSummaryResponse> unfreeze(@PathVariable UUID id) {
+        return ApiResponse.ok(businessService.unfreeze(id));
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('PROVIDER','ADMIN')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Permanently delete owned business and all of its records")
+    public void delete(@PathVariable UUID id) {
+        businessDeletionService.delete(id);
+    }
 }

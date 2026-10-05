@@ -311,6 +311,28 @@ public class BusinessService {
         return result;
     }
 
+    /** Hidden from customers and closed to new bookings; existing appointments are kept. */
+    @Transactional
+    public BusinessSummaryResponse freeze(UUID id) {
+        Business business = ownershipService.requireOwnedBusiness(id);
+        if (business.getStatus() != BusinessStatus.ACTIVE) {
+            throw new BusinessRuleException("Only active businesses can be frozen");
+        }
+        business.setStatus(BusinessStatus.INACTIVE);
+        return toSummary(business);
+    }
+
+    /** Only undoes an owner's freeze; suspended or pending businesses stay with the admin. */
+    @Transactional
+    public BusinessSummaryResponse unfreeze(UUID id) {
+        Business business = ownershipService.requireOwnedBusiness(id);
+        if (business.getStatus() != BusinessStatus.INACTIVE) {
+            throw new BusinessRuleException("Only frozen businesses can be reactivated");
+        }
+        business.setStatus(BusinessStatus.ACTIVE);
+        return toSummary(business);
+    }
+
     @Transactional
     public BusinessSummaryResponse updateStatus(UUID id, BusinessStatus status) {
         Business business = ownershipService.getBusiness(id);

@@ -20,6 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -151,6 +153,27 @@ public class ImageService {
             imageRepository.delete(image);
             log.info("User image deleted for account removal imageId={} userId={}", image.getId(), userId);
         }
+    }
+
+    /**
+     * Removes the images of a business that is being deleted (its own, its services' and its expert
+     * profiles') from storage, each row only after its file is gone. A {@link StorageException} stops
+     * the run so the caller can keep the business. Account avatars belong to the users and stay.
+     */
+    public void deleteAllForBusiness(UUID businessId, Collection<UUID> serviceIds, Collection<UUID> employeeIds) {
+        List<Image> images = new ArrayList<>(
+                imageRepository.findByOwnerTypeAndOwnerIdOrderByCreatedAtDesc(ImageOwnerType.BUSINESS, businessId));
+        for (UUID serviceId : serviceIds) {
+            images.addAll(imageRepository.findByOwnerTypeAndOwnerIdOrderByCreatedAtDesc(ImageOwnerType.SERVICE, serviceId));
+        }
+        for (UUID employeeId : employeeIds) {
+            images.addAll(imageRepository.findByOwnerTypeAndOwnerIdOrderByCreatedAtDesc(ImageOwnerType.EMPLOYEE, employeeId));
+        }
+        for (Image image : images) {
+            storage.delete(reference(image));
+            imageRepository.delete(image);
+        }
+        log.info("Business images deleted businessId={} count={}", businessId, images.size());
     }
 
     /** Resized delivery URL; provider URL rules stay in the storage implementation. */

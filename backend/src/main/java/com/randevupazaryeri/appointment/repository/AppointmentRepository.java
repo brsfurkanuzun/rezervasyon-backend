@@ -5,6 +5,7 @@ import com.randevupazaryeri.appointment.entity.AppointmentStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -17,6 +18,18 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
     Page<Appointment> findByCustomerIdOrderByStartDateTimeDesc(UUID customerId, Pageable pageable);
 
     Page<Appointment> findByBusinessIdOrderByStartDateTimeDesc(UUID businessId, Pageable pageable);
+
+    @Query("""
+        select a from Appointment a join fetch a.customer
+        where a.business.id = :businessId and a.status in :statuses and a.endDateTime > :now
+        """)
+    List<Appointment> findOpenByBusinessId(@Param("businessId") UUID businessId,
+                                           @Param("statuses") List<AppointmentStatus> statuses,
+                                           @Param("now") Instant now);
+
+    @Modifying
+    @Query("delete from Appointment a where a.business.id = :businessId")
+    int deleteByBusinessId(@Param("businessId") UUID businessId);
 
     Page<Appointment> findByBusinessIdAndEmployeeIdOrderByStartDateTimeDesc(UUID businessId, UUID employeeId, Pageable pageable);
 
