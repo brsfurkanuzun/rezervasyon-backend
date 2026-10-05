@@ -80,6 +80,11 @@ public class AuthService {
         if (!user.isActive()) {
             throw new UnauthorizedException("Account is inactive");
         }
+        // V26 flagged every account with a social link, including ones that also had a real password.
+        if (!user.isPasswordSet()) {
+            user.setPasswordSet(true);
+            userRepository.save(user);
+        }
         return issueTokens(user);
     }
 

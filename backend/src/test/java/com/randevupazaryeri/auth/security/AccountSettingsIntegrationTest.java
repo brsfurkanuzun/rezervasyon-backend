@@ -83,6 +83,24 @@ class AccountSettingsIntegrationTest {
     }
 
     @Test
+    void passwordLoginMarksTheAccountAsHavingAPassword() throws Exception {
+        register(PASSWORD_USER);
+        jdbc.update("UPDATE users SET password_set = FALSE WHERE email = ?", PASSWORD_USER);
+
+        String access = objectMapper.readTree(mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + PASSWORD_USER + "\",\"password\":\"Password123!\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.user.hasPassword").value(true))
+                .andReturn().getResponse().getContentAsString()).path("data").path("accessToken").asText();
+
+        mockMvc.perform(put("/api/v1/auth/me/password").header("Authorization", "Bearer " + access)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"newPassword\":\"NewPassword456!\"}"))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
     void socialAccountCannotUnlinkItsOnlySignInMethodUntilItSetsAPassword() throws Exception {
         String access = googleSignIn("google-sub-settings", GOOGLE_USER).path("accessToken").asText();
 
