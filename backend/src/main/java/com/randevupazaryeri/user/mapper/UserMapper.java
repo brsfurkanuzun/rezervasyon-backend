@@ -20,6 +20,9 @@ public final class UserMapper {
                 .gender(user.getGender())
                 .role(user.getRole())
                 .isActive(user.isActive())
+                .hasPassword(user.isPasswordSet())
+                .googleLinked(user.getGoogleUserId() != null)
+                .appleLinked(user.getAppleUserId() != null)
                 .createdAt(user.getCreatedAt())
                 .build();
     }

@@ -1,0 +1,163 @@
+package com.randevupazaryeri.auth.security;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.randevupazaryeri.support.PostgresTestSupport;
+import io.jsonwebtoken.Jwts;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
+import java.time.Instant;
+import java.util.Date;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+class AccountSettingsIntegrationTest {
+    private static final String CLIENT_ID = "test-web-client.apps.googleusercontent.com";
+    private static final String PASSWORD_USER = "settings.password@example.com";
+    private static final String GOOGLE_USER = "settings.google@gmail.com";
+
+    @DynamicPropertySource
+    static void props(DynamicPropertyRegistry registry) {
+        PostgresTestSupport.registerDatasource(registry);
+        registry.add("app.google.web-client-id", () -> CLIENT_ID);
+    }
+
+    @Autowired MockMvc mockMvc;
+    @Autowired ObjectMapper objectMapper;
+    @Autowired JdbcTemplate jdbc;
+    @Autowired GoogleIdentityVerifier verifier;
+
+    private PrivateKey googleKey;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        KeyPair pair = generator.generateKeyPair();
+        googleKey = pair.getPrivate();
+        verifier.useKeys(Map.of("test-kid", pair.getPublic()));
+        jdbc.update("DELETE FROM users WHERE email IN (?, ?)", PASSWORD_USER, GOOGLE_USER);
+    }
+
+    @Test
+    void changesPasswordOnlyWithTheCurrentOne() throws Exception {
+        String access = register(PASSWORD_USER).path("accessToken").asText();
+
+        mockMvc.perform(put("/api/v1/auth/me/password").header("Authorization", "Bearer " + access)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentPassword\":\"wrong-password\",\"newPassword\":\"NewPassword456!\"}"))
+                .andExpect(status().isUnprocessableEntity());
+
+        mockMvc.perform(put("/api/v1/auth/me/password").header("Authorization", "Bearer " + access)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentPassword\":\"Password123!\",\"newPassword\":\"NewPassword456!\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accessToken").isNotEmpty());
+
+        mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + PASSWORD_USER + "\",\"password\":\"NewPassword456!\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void socialAccountCannotUnlinkItsOnlySignInMethodUntilItSetsAPassword() throws Exception {
+        String access = googleSignIn("google-sub-settings", GOOGLE_USER).path("accessToken").asText();
+
+        mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + access))
+                .andExpect(jsonPath("$.data.hasPassword").value(false))
+                .andExpect(jsonPath("$.data.googleLinked").value(true))
+                .andExpect(jsonPath("$.data.appleLinked").value(false));
+
+        mockMvc.perform(delete("/api/v1/auth/me/google").header("Authorization", "Bearer " + access))
+                .andExpect(status().isUnprocessableEntity());
+
+        String fresh = objectMapper.readTree(mockMvc.perform(put("/api/v1/auth/me/password")
+                        .header("Authorization", "Bearer " + access)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"newPassword\":\"MyOwnPassword1!\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.user.hasPassword").value(true))
+                .andReturn().getResponse().getContentAsString()).path("data").path("accessToken").asText();
+
+        mockMvc.perform(delete("/api/v1/auth/me/google").header("Authorization", "Bearer " + fresh))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.googleLinked").value(false));
+    }
+
+    @Test
+    void linksGoogleUnlessAnotherAccountOwnsIt() throws Exception {
+        googleSignIn("google-sub-taken", GOOGLE_USER);
+        String access = register(PASSWORD_USER).path("accessToken").asText();
+
+        mockMvc.perform(post("/api/v1/auth/me/google").header("Authorization", "Bearer " + access)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"" + token("google-sub-taken", GOOGLE_USER) + "\"}"))
+                .andExpect(status().isUnprocessableEntity());
+
+        mockMvc.perform(post("/api/v1/auth/me/google").header("Authorization", "Bearer " + access)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"" + token("google-sub-free", "someone@gmail.com") + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.googleLinked").value(true));
+        assertThat(jdbc.queryForObject("SELECT google_user_id FROM users WHERE email = ?", String.class,
+                PASSWORD_USER)).isEqualTo("google-sub-free");
+    }
+
+    private JsonNode register(String email) throws Exception {
+        String response = mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"firstName":"Set","lastName":"Tings","email":"%s","password":"Password123!","role":"CUSTOMER"}
+                                """.formatted(email)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(response).path("data");
+    }
+
+    private JsonNode googleSignIn(String subject, String email) throws Exception {
+        String response = mockMvc.perform(post("/api/v1/auth/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"idToken\":\"" + token(subject, email) + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(response).path("data");
+    }
+
+    private String token(String subject, String email) {
+        Instant now = Instant.now();
+        return Jwts.builder()
+                .header().keyId("test-kid").and()
+                .issuer("https://accounts.google.com")
+                .audience().add(CLIENT_ID).and()
+                .subject(subject)
+                .claim("email", email)
+                .claim("email_verified", true)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(600)))
+                .signWith(googleKey, Jwts.SIG.RS256)
+                .compact();
+    }
+}

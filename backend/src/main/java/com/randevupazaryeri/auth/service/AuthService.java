@@ -118,6 +118,7 @@ public class AuthService {
                 .lastName(lastName != null ? lastName : "Kullanıcısı")
                 .email(email)
                 .passwordHash(passwordEncoder.encode(generateRawRefreshToken()))
+                .passwordSet(false)
                 .role(role)
                 .isActive(true)
                 .build();
@@ -178,9 +179,84 @@ public class AuthService {
                 .lastName(lastName != null ? lastName : "Kullanıcısı")
                 .email(email)
                 .passwordHash(passwordEncoder.encode(generateRawRefreshToken()))
+                .passwordSet(false)
                 .role(role)
                 .isActive(true)
                 .build();
+    }
+
+    /**
+     * Sets a new password. Accounts that never chose one (social sign-ups) skip the current-password
+     * check. Other sessions are signed out; the caller gets fresh tokens.
+     */
+    @Transactional
+    public AuthResponse changePassword(ChangePasswordRequest request) {
+        User user = userService.getById(SecurityUtils.currentUserId());
+        if (user.isPasswordSet()) {
+            String current = request.getCurrentPassword();
+            if (current == null || !passwordEncoder.matches(current, user.getPasswordHash())) {
+                throw new BusinessRuleException("Current password is incorrect");
+            }
+        }
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        user.setPasswordSet(true);
+        userRepository.saveAndFlush(user);
+        refreshTokenRepository.revokeAllByUserId(user.getId());
+        return issueTokens(user);
+    }
+
+    @Transactional
+    public UserResponse linkGoogle(GoogleLinkRequest request) {
+        User user = userService.getById(SecurityUtils.currentUserId());
+        String subject = googleIdentityVerifier.verify(request.getIdToken()).subject();
+        userRepository.findByGoogleUserId(subject)
+                .filter(owner -> !owner.getId().equals(user.getId()))
+                .ifPresent(owner -> {
+                    throw new BusinessRuleException("This Google account is already linked to another account");
+                });
+        user.setGoogleUserId(subject);
+        return UserMapper.toResponse(userRepository.save(user));
+    }
+
+    @Transactional
+    public UserResponse unlinkGoogle() {
+        User user = userService.getById(SecurityUtils.currentUserId());
+        if (user.getGoogleUserId() != null) {
+            requireOtherSignInMethod(user.isPasswordSet() || user.getAppleUserId() != null);
+            user.setGoogleUserId(null);
+            userRepository.save(user);
+        }
+        return UserMapper.toResponse(user);
+    }
+
+    @Transactional
+    public UserResponse linkApple(AppleLinkRequest request) {
+        User user = userService.getById(SecurityUtils.currentUserId());
+        String subject = appleIdentityVerifier.verify(request.getIdentityToken()).subject();
+        userRepository.findByAppleUserId(subject)
+                .filter(owner -> !owner.getId().equals(user.getId()))
+                .ifPresent(owner -> {
+                    throw new BusinessRuleException("This Apple account is already linked to another account");
+                });
+        user.setAppleUserId(subject);
+        return UserMapper.toResponse(userRepository.save(user));
+    }
+
+    @Transactional
+    public UserResponse unlinkApple() {
+        User user = userService.getById(SecurityUtils.currentUserId());
+        if (user.getAppleUserId() != null) {
+            requireOtherSignInMethod(user.isPasswordSet() || user.getGoogleUserId() != null);
+            user.setAppleUserId(null);
+            userRepository.save(user);
+        }
+        return UserMapper.toResponse(user);
+    }
+
+    private void requireOtherSignInMethod(boolean hasOther) {
+        if (!hasOther) {
+            throw new BusinessRuleException("This is your only way to sign in. Set a password before unlinking it.");
+        }
     }
 
     /**

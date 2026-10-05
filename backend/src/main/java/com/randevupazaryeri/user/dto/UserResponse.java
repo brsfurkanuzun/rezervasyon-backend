@@ -21,5 +21,8 @@ public class UserResponse {
     private String gender;
     private Role role;
     private boolean isActive;
+    private boolean hasPassword;
+    private boolean googleLinked;
+    private boolean appleLinked;
     private Instant createdAt;
 }

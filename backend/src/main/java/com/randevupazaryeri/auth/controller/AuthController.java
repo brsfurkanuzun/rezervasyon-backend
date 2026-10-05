@@ -97,4 +97,39 @@ public class AuthController {
     public ApiResponse<UserResponse> updateMe(@Valid @RequestBody UpdateProfileRequest request) {
         return ApiResponse.ok(authService.updateProfile(request));
     }
+
+    @PutMapping("/me/password")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Change (or first set) my password; signs out other sessions")
+    public ApiResponse<AuthResponse> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        return ApiResponse.ok(authService.changePassword(request));
+    }
+
+    @PostMapping("/me/google")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Link a Google account to me")
+    public ApiResponse<UserResponse> linkGoogle(@Valid @RequestBody GoogleLinkRequest request) {
+        return ApiResponse.ok(authService.linkGoogle(request));
+    }
+
+    @DeleteMapping("/me/google")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Unlink my Google account")
+    public ApiResponse<UserResponse> unlinkGoogle() {
+        return ApiResponse.ok(authService.unlinkGoogle());
+    }
+
+    @PostMapping("/me/apple")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Link an Apple account to me")
+    public ApiResponse<UserResponse> linkApple(@Valid @RequestBody AppleLinkRequest request) {
+        return ApiResponse.ok(authService.linkApple(request));
+    }
+
+    @DeleteMapping("/me/apple")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Unlink my Apple account")
+    public ApiResponse<UserResponse> unlinkApple() {
+        return ApiResponse.ok(authService.unlinkApple());
+    }
 }

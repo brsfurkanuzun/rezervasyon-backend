@@ -47,6 +47,11 @@ public class User {
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
+    /** False for social sign-ups, whose password hash is random and unknown to the user. */
+    @Column(name = "password_set", nullable = false)
+    @Builder.Default
+    private boolean passwordSet = true;
+
     /** Stable "sub" claim from Sign in with Apple. */
     @Column(name = "apple_user_id")
     private String appleUserId;
