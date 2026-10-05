@@ -4,6 +4,8 @@ import com.randevupazaryeri.business.service.BusinessOwnershipService;
 import com.randevupazaryeri.common.exception.ForbiddenException;
 import com.randevupazaryeri.common.exception.ResourceNotFoundException;
 import com.randevupazaryeri.common.security.SecurityUtils;
+import com.randevupazaryeri.employee.entity.Employee;
+import com.randevupazaryeri.employee.repository.EmployeeRepository;
 import com.randevupazaryeri.image.entity.Image;
 import com.randevupazaryeri.image.entity.ImageFolder;
 import com.randevupazaryeri.serviceoffer.entity.ServiceOffer;
@@ -20,6 +22,7 @@ import java.util.UUID;
  *   <li>Business profile/cover and service images: the business owner (or an admin).</li>
  *   <li>Business gallery: the owner or an active team member.</li>
  *   <li>User avatar: only the user themself.</li>
+ *   <li>Employee photo: the business owner or the employee themself.</li>
  *   <li>Delete: admin, the owner of the business/user, or the uploader while still a team member.</li>
  * </ul>
  */
@@ -29,6 +32,7 @@ public class ImageAccessPolicy {
 
     private final BusinessOwnershipService ownership;
     private final ServiceOfferRepository serviceOfferRepository;
+    private final EmployeeRepository employeeRepository;
 
     public UUID currentUserId() {
         return SecurityUtils.currentUserId();
@@ -44,6 +48,7 @@ public class ImageAccessPolicy {
             case BUSINESS_PROFILE, BUSINESS_COVER -> ownership.requireOwnedBusiness(ownerId);
             case BUSINESS_GALLERY -> ownership.requireMember(ownerId);
             case SERVICE_IMAGE -> ownership.requireOwnedBusiness(businessOfService(ownerId));
+            case EMPLOYEE_PHOTO -> requireEmployeeAccess(ownerId);
         }
     }
 
@@ -66,6 +71,15 @@ public class ImageAccessPolicy {
                 }
             }
             case SERVICE -> ownership.requireOwnedBusiness(businessOfService(image.getOwnerId()));
+            case EMPLOYEE -> requireEmployeeAccess(image.getOwnerId());
+        }
+    }
+
+    private void requireEmployeeAccess(UUID employeeId) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found: " + employeeId));
+        if (!ownership.requireMember(employee.getBusiness().getId()).canAccessEmployee(employeeId)) {
+            throw new ForbiddenException("You cannot change this employee's photo");
         }
     }
 

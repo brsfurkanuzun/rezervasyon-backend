@@ -1,0 +1,6 @@
+ALTER TABLE images DROP CONSTRAINT chk_images_owner_type;
+ALTER TABLE images ADD CONSTRAINT chk_images_owner_type CHECK (owner_type IN ('BUSINESS', 'SERVICE', 'USER', 'EMPLOYEE'));
+
+ALTER TABLE images DROP CONSTRAINT chk_images_folder;
+ALTER TABLE images ADD CONSTRAINT chk_images_folder CHECK (folder IN
+    ('BUSINESS_PROFILE', 'BUSINESS_COVER', 'BUSINESS_GALLERY', 'SERVICE_IMAGE', 'USER_AVATAR', 'EMPLOYEE_PHOTO'));

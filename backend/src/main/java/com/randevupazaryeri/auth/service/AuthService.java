@@ -12,6 +12,7 @@ import com.randevupazaryeri.common.exception.BusinessRuleException;
 import com.randevupazaryeri.common.exception.UnauthorizedException;
 import com.randevupazaryeri.common.security.SecurityUtils;
 import com.randevupazaryeri.config.JwtProperties;
+import com.randevupazaryeri.employee.repository.EmployeeRepository;
 import com.randevupazaryeri.user.dto.UserResponse;
 import com.randevupazaryeri.user.entity.Role;
 import com.randevupazaryeri.user.entity.User;
@@ -31,6 +32,7 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,6 +47,7 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final AuthenticationManager authenticationManager;
     private final UserService userService;
+    private final EmployeeRepository employeeRepository;
     private final AppleIdentityVerifier appleIdentityVerifier;
     private final AppleProperties appleProperties;
     private final GoogleIdentityVerifier googleIdentityVerifier;
@@ -318,7 +321,11 @@ public class AuthService {
         user.setPhone(blankToNull(request.getPhone()));
         user.setBirthDate(request.getBirthDate());
         user.setGender(blankToNull(request.getGender()));
+        String previousPhoto = user.getPhotoUrl();
         user.setPhotoUrl(blankToNull(request.getPhotoUrl()));
+        if (!Objects.equals(previousPhoto, user.getPhotoUrl())) {
+            employeeRepository.followAccountPhoto(user.getId(), previousPhoto, user.getPhotoUrl());
+        }
         return UserMapper.toResponse(userRepository.save(user));
     }
 

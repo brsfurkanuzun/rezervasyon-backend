@@ -210,6 +210,45 @@ class ImageUploadIntegrationTest {
                 .andExpect(status().isNoContent());
     }
 
+    @Test
+    void employeePhotoIsSetByTheOwnerOrTheExpertAndLinkedProfilesFollowTheAccountPhoto() throws Exception {
+        String manual = data(json(post(biz("/employees")), owner, """
+                {"firstName":"Manual","lastName":"Expert"}
+                """).andExpect(status().isCreated())).path("id").asText();
+        JsonNode photo = data(upload(employeePhoto(manual), owner, png()).andExpect(status().isCreated()));
+        assertThat(photo.path("publicId").asText()).startsWith("resplz/employees/" + manual + "/photo/");
+        assertThat(employeePhotoUrl(manual)).isEqualTo(photo.path("url").asText());
+        upload(employeePhoto(manual), otherProvider, png()).andExpect(status().isForbidden());
+
+        String code = data(json(post(biz("/invitations")), owner, null).andExpect(status().isCreated()))
+                .path("code").asText();
+        json(post("/api/v1/invitations/" + code + "/accept"), otherProvider, null).andExpect(status().isOk());
+        String staff = jdbc.queryForObject("SELECT e.id::text FROM employees e JOIN users u ON u.id = e.user_id "
+                + "WHERE u.email = 'img-other@test.com'", String.class);
+
+        JsonNode avatar = data(upload(multipart("/api/v1/users/me/avatar"), otherProvider, png())
+                .andExpect(status().isCreated()));
+        assertThat(employeePhotoUrl(staff)).isEqualTo(avatar.path("url").asText());
+
+        json(put("/api/v1/auth/me"), otherProvider, """
+                {"firstName":"T","lastName":"U","email":"img-other@test.com","photoUrl":"https://cdn.test/profile.webp"}
+                """).andExpect(status().isOk());
+        assertThat(employeePhotoUrl(staff)).isEqualTo("https://cdn.test/profile.webp");
+
+        upload(employeePhoto(manual), otherProvider, png()).andExpect(status().isForbidden());
+        JsonNode own = data(upload(employeePhoto(staff), otherProvider, png()).andExpect(status().isCreated()));
+        upload(multipart("/api/v1/users/me/avatar"), otherProvider, png()).andExpect(status().isCreated());
+        assertThat(employeePhotoUrl(staff)).isEqualTo(own.path("url").asText());
+    }
+
+    private MockHttpServletRequestBuilder employeePhoto(String employeeId) {
+        return multipart("/api/v1/images/upload").param("folder", "EMPLOYEE_PHOTO").param("ownerId", employeeId);
+    }
+
+    private String employeePhotoUrl(String employeeId) {
+        return jdbc.queryForObject("SELECT photo_url FROM employees WHERE id = ?::uuid", String.class, employeeId);
+    }
+
     private MockMultipartFile png() {
         return new MockMultipartFile("file", "photo.png", "image/png", TestImages.png(64, 48));
     }

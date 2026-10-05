@@ -11,7 +11,8 @@ public enum ImageFolder {
     BUSINESS_COVER(ImageOwnerType.BUSINESS, "businesses", "cover", 1600, true),
     BUSINESS_GALLERY(ImageOwnerType.BUSINESS, "businesses", "gallery", 1600, false),
     SERVICE_IMAGE(ImageOwnerType.SERVICE, "services", null, 1200, true),
-    USER_AVATAR(ImageOwnerType.USER, "users", "avatar", 800, true);
+    USER_AVATAR(ImageOwnerType.USER, "users", "avatar", 800, true),
+    EMPLOYEE_PHOTO(ImageOwnerType.EMPLOYEE, "employees", "photo", 800, true);
 
     private final ImageOwnerType ownerType;
     private final String collection;

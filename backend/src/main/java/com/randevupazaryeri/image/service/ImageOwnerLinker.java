@@ -2,6 +2,8 @@ package com.randevupazaryeri.image.service;
 
 import com.randevupazaryeri.business.entity.Business;
 import com.randevupazaryeri.common.exception.ResourceNotFoundException;
+import com.randevupazaryeri.employee.entity.Employee;
+import com.randevupazaryeri.employee.repository.EmployeeRepository;
 import com.randevupazaryeri.image.entity.ImageFolder;
 import com.randevupazaryeri.serviceoffer.entity.ServiceOffer;
 import com.randevupazaryeri.user.entity.User;
@@ -15,7 +17,8 @@ import java.util.UUID;
 
 /**
  * Keeps the existing URL columns ({@code users.photo_url}, {@code businesses.logo_url},
- * {@code businesses.cover_image_url}, {@code services.image_url}) in sync with single-slot images.
+ * {@code businesses.cover_image_url}, {@code services.image_url}, {@code employees.photo_url}) in sync
+ * with single-slot images.
  * Must be called inside a transaction; the owner row is locked so concurrent replacements serialize.
  */
 @Component
@@ -23,10 +26,17 @@ import java.util.UUID;
 public class ImageOwnerLinker {
 
     private final EntityManager entityManager;
+    private final EmployeeRepository employeeRepository;
 
     public void link(ImageFolder folder, UUID ownerId, String url) {
         switch (folder) {
-            case USER_AVATAR -> lock(User.class, ownerId).setPhotoUrl(url);
+            case USER_AVATAR -> {
+                User user = lock(User.class, ownerId);
+                String previous = user.getPhotoUrl();
+                user.setPhotoUrl(url);
+                employeeRepository.followAccountPhoto(ownerId, previous, url);
+            }
+            case EMPLOYEE_PHOTO -> lock(Employee.class, ownerId).setPhotoUrl(url);
             case BUSINESS_PROFILE -> lock(Business.class, ownerId).setLogoUrl(url);
             case BUSINESS_COVER -> lock(Business.class, ownerId).setCoverImageUrl(url);
             case SERVICE_IMAGE -> lock(ServiceOffer.class, ownerId).setImageUrl(url);
@@ -41,6 +51,11 @@ public class ImageOwnerLinker {
             case USER_AVATAR -> {
                 User user = lockIfPresent(User.class, ownerId);
                 if (user != null && Objects.equals(user.getPhotoUrl(), url)) user.setPhotoUrl(null);
+                employeeRepository.followAccountPhoto(ownerId, url, null);
+            }
+            case EMPLOYEE_PHOTO -> {
+                Employee employee = lockIfPresent(Employee.class, ownerId);
+                if (employee != null && Objects.equals(employee.getPhotoUrl(), url)) employee.setPhotoUrl(null);
             }
             case BUSINESS_PROFILE -> {
                 Business business = lockIfPresent(Business.class, ownerId);
