@@ -64,11 +64,15 @@ public class AuthService {
         if (userRepository.existsByEmailIgnoreCase(request.getEmail())) {
             throw new BusinessRuleException("Email already registered");
         }
+        String phone = blankToNull(request.getPhone());
+        if (phone != null && userRepository.existsByPhone(phone)) {
+            throw new BusinessRuleException("Phone number already registered");
+        }
         User user = User.builder()
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
                 .email(request.getEmail().trim().toLowerCase())
-                .phone(request.getPhone())
+                .phone(phone)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(request.getRole())
                 .isActive(true)
@@ -326,10 +330,18 @@ public class AuthService {
     @Transactional
     public UserResponse updateProfile(UpdateProfileRequest request) {
         User user = userService.getById(SecurityUtils.currentUserId());
+        String email = request.getEmail().trim().toLowerCase();
+        String phone = blankToNull(request.getPhone());
+        if (userRepository.existsByEmailIgnoreCaseAndIdNot(email, user.getId())) {
+            throw new BusinessRuleException("Email already registered");
+        }
+        if (phone != null && userRepository.existsByPhoneAndIdNot(phone, user.getId())) {
+            throw new BusinessRuleException("Phone number already registered");
+        }
         user.setFirstName(request.getFirstName().trim());
         user.setLastName(request.getLastName().trim());
-        user.setEmail(request.getEmail().trim().toLowerCase());
-        user.setPhone(blankToNull(request.getPhone()));
+        user.setEmail(email);
+        user.setPhone(phone);
         user.setBirthDate(request.getBirthDate());
         user.setGender(blankToNull(request.getGender()));
         String previousPhoto = user.getPhotoUrl();

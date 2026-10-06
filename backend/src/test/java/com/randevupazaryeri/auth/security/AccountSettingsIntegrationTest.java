@@ -15,6 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -142,6 +143,33 @@ class AccountSettingsIntegrationTest {
                 .andExpect(jsonPath("$.data.googleLinked").value(true));
         assertThat(jdbc.queryForObject("SELECT google_user_id FROM users WHERE email = ?", String.class,
                 PASSWORD_USER)).isEqualTo("google-sub-free");
+    }
+
+    @Test
+    void profileUpdateRejectsAnotherAccountsEmailOrPhone() throws Exception {
+        String other = register(GOOGLE_USER).path("accessToken").asText();
+        updateProfile(other, GOOGLE_USER, "+905550001122").andExpect(status().isOk());
+        String access = register(PASSWORD_USER).path("accessToken").asText();
+
+        updateProfile(access, PASSWORD_USER, "+905550001122")
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value("Phone number already registered"));
+        updateProfile(access, GOOGLE_USER, null)
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message").value("Email already registered"));
+        updateProfile(access, PASSWORD_USER, "+905550003344").andExpect(status().isOk());
+        updateProfile(access, PASSWORD_USER, "+905550003344")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.phone").value("+905550003344"));
+    }
+
+    private ResultActions updateProfile(String access, String email, String phone) throws Exception {
+        String phoneJson = phone == null ? "null" : "\"" + phone + "\"";
+        return mockMvc.perform(put("/api/v1/auth/me").header("Authorization", "Bearer " + access)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"firstName":"Yeni","lastName":"İsim","email":"%s","phone":%s}
+                        """.formatted(email, phoneJson)));
     }
 
     private JsonNode register(String email) throws Exception {
