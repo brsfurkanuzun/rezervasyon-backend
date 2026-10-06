@@ -68,14 +68,14 @@ public class AuthController {
     }
 
     @PostMapping("/password/forgot")
-    @Operation(summary = "Email a password reset code; the response is the same whether or not the email exists")
+    @Operation(summary = "Email a password reset link; the response is the same whether or not the email exists")
     public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        passwordResetService.requestCode(request);
+        passwordResetService.requestLink(request);
         return ApiResponse.empty();
     }
 
     @PostMapping("/password/reset")
-    @Operation(summary = "Set a new password with the emailed code; signs out other sessions and signs in")
+    @Operation(summary = "Set a new password with the token from the emailed link; signs out other sessions and signs in")
     public ApiResponse<AuthResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         return ApiResponse.ok(passwordResetService.reset(request));
     }

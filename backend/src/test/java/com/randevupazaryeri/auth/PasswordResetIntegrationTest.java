@@ -20,6 +20,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,6 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PasswordResetIntegrationTest {
 
     private static final String EMAIL = "reset-user@test.com";
+    private static final String PROVIDER_EMAIL = "reset-provider@test.com";
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry registry) {
@@ -63,18 +65,20 @@ class PasswordResetIntegrationTest {
     }
 
     @Test
-    void resetsThePasswordWithTheEmailedCode() throws Exception {
+    void resetsThePasswordWithTheEmailedLink() throws Exception {
         post("/api/v1/auth/password/forgot", "{\"email\":\"Reset-User@test.com\"}").andExpect(status().isOk());
-        String code = sentCode();
-        assertThat(jdbc.queryForObject("SELECT code_hash FROM password_reset_codes", String.class)).doesNotContain(code);
+        String link = sentLink(EMAIL);
+        assertThat(link).startsWith("https://www.resplz.com/tr/reset-password#token=");
+        String token = link.substring(link.indexOf("#token=") + 7);
+        assertThat(jdbc.queryForObject("SELECT token_hash FROM password_reset_tokens", String.class))
+                .isNotEqualTo(token).hasSize(64);
 
-        String wrong = code.equals("000000") ? "111111" : "000000";
-        post("/api/v1/auth/password/reset", body(wrong, "NewPassword1!")).andExpect(status().isUnprocessableEntity());
-        assertThat(jdbc.queryForObject("SELECT attempts FROM password_reset_codes", Integer.class)).isEqualTo(1);
+        post("/api/v1/auth/password/reset", body("not-the-token", "NewPassword1!"))
+                .andExpect(status().isUnprocessableEntity());
 
-        JsonNode auth = data(post("/api/v1/auth/password/reset", body(code, "NewPassword1!")).andExpect(status().isOk()));
+        JsonNode auth = data(post("/api/v1/auth/password/reset", body(token, "NewPassword1!")).andExpect(status().isOk()));
         assertThat(auth.path("accessToken").asText()).isNotBlank();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM password_reset_codes", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM password_reset_tokens", Integer.class)).isZero();
 
         post("/api/v1/auth/login", "{\"email\":\"%s\",\"password\":\"Password123!\"}".formatted(EMAIL))
                 .andExpect(status().isUnauthorized());
@@ -83,7 +87,25 @@ class PasswordResetIntegrationTest {
         post("/api/v1/auth/refresh", "{\"refreshToken\":\"%s\"}".formatted(oldRefreshToken))
                 .andExpect(status().isUnauthorized());
 
-        post("/api/v1/auth/password/reset", body(code, "Another1!")).andExpect(status().isUnprocessableEntity());
+        post("/api/v1/auth/password/reset", body(token, "Another1!")).andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void businessAccountsGetThePartnerSiteLink() throws Exception {
+        post("/api/v1/auth/register", """
+                {"firstName":"Reset","lastName":"Provider","email":"%s","password":"Password123!","role":"PROVIDER"}
+                """.formatted(PROVIDER_EMAIL)).andExpect(status().isCreated());
+        post("/api/v1/auth/password/forgot", "{\"email\":\"%s\"}".formatted(PROVIDER_EMAIL)).andExpect(status().isOk());
+        assertThat(sentLink(PROVIDER_EMAIL)).startsWith("https://partner.resplz.com/tr/reset-password#token=");
+    }
+
+    @Test
+    void rejectsAnExpiredLink() throws Exception {
+        post("/api/v1/auth/password/forgot", "{\"email\":\"%s\"}".formatted(EMAIL)).andExpect(status().isOk());
+        String link = sentLink(EMAIL);
+        jdbc.update("UPDATE password_reset_tokens SET expires_at = NOW() - INTERVAL '1 minute'");
+        post("/api/v1/auth/password/reset", body(link.substring(link.indexOf("#token=") + 7), "NewPassword1!"))
+                .andExpect(status().isUnprocessableEntity());
     }
 
     @Test
@@ -93,37 +115,26 @@ class PasswordResetIntegrationTest {
     }
 
     @Test
-    void locksTheCodeAfterFiveWrongTries() throws Exception {
-        post("/api/v1/auth/password/forgot", "{\"email\":\"%s\"}".formatted(EMAIL)).andExpect(status().isOk());
-        String code = sentCode();
-        String wrong = code.equals("000000") ? "111111" : "000000";
-        for (int i = 0; i < 5; i++) {
-            post("/api/v1/auth/password/reset", body(wrong, "NewPassword1!")).andExpect(status().isUnprocessableEntity());
-        }
-        post("/api/v1/auth/password/reset", body(code, "NewPassword1!")).andExpect(status().isUnprocessableEntity());
-    }
-
-    @Test
-    void waitsBeforeSendingAnotherCode() throws Exception {
+    void waitsBeforeSendingAnotherLink() throws Exception {
         post("/api/v1/auth/password/forgot", "{\"email\":\"%s\"}".formatted(EMAIL)).andExpect(status().isOk());
         post("/api/v1/auth/password/forgot", "{\"email\":\"%s\"}".formatted(EMAIL)).andExpect(status().isOk());
         verify(emailService, times(1)).send(eq(EMAIL), anyString(), anyString());
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM password_reset_codes", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM password_reset_tokens", Integer.class)).isEqualTo(1);
     }
 
     @Test
     void endpointsArePublic() throws Exception {
-        post("/api/v1/auth/password/reset", body("123456", "NewPassword1!")).andExpect(status().isUnprocessableEntity());
+        post("/api/v1/auth/password/reset", body("unknown-token", "NewPassword1!")).andExpect(status().isUnprocessableEntity());
     }
 
-    private String sentCode() {
+    private String sentLink(String email) {
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(emailService).send(eq(EMAIL), anyString(), text.capture());
-        return text.getValue().lines().map(String::trim).filter(line -> line.matches("\\d{6}")).findFirst().orElseThrow();
+        verify(emailService).send(eq(email), anyString(), text.capture());
+        return text.getValue().lines().map(String::trim).filter(line -> line.startsWith("https://")).findFirst().orElseThrow();
     }
 
-    private String body(String code, String password) {
-        return "{\"email\":\"%s\",\"code\":\"%s\",\"newPassword\":\"%s\"}".formatted(EMAIL, code, password);
+    private String body(String token, String password) {
+        return "{\"token\":\"%s\",\"newPassword\":\"%s\"}".formatted(token, password);
     }
 
     private ResultActions post(String path, String body) throws Exception {
@@ -136,7 +147,9 @@ class PasswordResetIntegrationTest {
     }
 
     private void cleanUp() {
-        jdbc.queryForList("SELECT id FROM users WHERE email = ?", UUID.class, EMAIL)
-                .forEach(id -> jdbc.update("DELETE FROM users WHERE id = ?", id));
+        for (String email : List.of(EMAIL, PROVIDER_EMAIL)) {
+            jdbc.queryForList("SELECT id FROM users WHERE email = ?", UUID.class, email)
+                    .forEach(id -> jdbc.update("DELETE FROM users WHERE id = ?", id));
+        }
     }
 }

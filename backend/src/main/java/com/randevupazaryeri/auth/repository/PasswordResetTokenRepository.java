@@ -1,6 +1,6 @@
 package com.randevupazaryeri.auth.repository;
 
-import com.randevupazaryeri.auth.entity.PasswordResetCode;
+import com.randevupazaryeri.auth.entity.PasswordResetToken;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -10,17 +10,19 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface PasswordResetCodeRepository extends JpaRepository<PasswordResetCode, UUID> {
+public interface PasswordResetTokenRepository extends JpaRepository<PasswordResetToken, UUID> {
 
-    Optional<PasswordResetCode> findFirstByUserIdOrderByCreatedAtDesc(UUID userId);
+    Optional<PasswordResetToken> findByTokenHash(String tokenHash);
+
+    Optional<PasswordResetToken> findFirstByUserIdOrderByCreatedAtDesc(UUID userId);
 
     long countByUserIdAndCreatedAtAfter(UUID userId, Instant after);
 
     @Modifying
-    @Query("delete from PasswordResetCode c where c.userId = :userId")
+    @Query("delete from PasswordResetToken t where t.userId = :userId")
     int deleteByUserId(@Param("userId") UUID userId);
 
     @Modifying
-    @Query("delete from PasswordResetCode c where c.userId = :userId and c.createdAt < :before")
+    @Query("delete from PasswordResetToken t where t.userId = :userId and t.createdAt < :before")
     int deleteOlderThan(@Param("userId") UUID userId, @Param("before") Instant before);
 }

@@ -8,21 +8,18 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "password_reset_codes")
+@Table(name = "password_reset_tokens")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-public class PasswordResetCode {
+public class PasswordResetToken {
     @Id @GeneratedValue @UuidGenerator
     private UUID id;
 
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
-    /** BCrypt hash; the code itself is only ever in the email. */
-    @Column(name = "code_hash", nullable = false, length = 100)
-    private String codeHash;
-
-    @Column(nullable = false)
-    private int attempts;
+    /** SHA-256 hex of the token; the token itself is only ever in the emailed link. */
+    @Column(name = "token_hash", nullable = false, length = 64)
+    private String tokenHash;
 
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
