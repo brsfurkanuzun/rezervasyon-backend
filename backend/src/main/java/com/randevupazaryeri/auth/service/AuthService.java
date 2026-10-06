@@ -11,6 +11,7 @@ import com.randevupazaryeri.config.GoogleProperties;
 import com.randevupazaryeri.common.exception.BusinessRuleException;
 import com.randevupazaryeri.common.exception.UnauthorizedException;
 import com.randevupazaryeri.common.security.SecurityUtils;
+import com.randevupazaryeri.consent.service.ConsentService;
 import com.randevupazaryeri.config.JwtProperties;
 import com.randevupazaryeri.employee.repository.EmployeeRepository;
 import com.randevupazaryeri.user.dto.UserResponse;
@@ -52,6 +53,7 @@ public class AuthService {
     private final AppleProperties appleProperties;
     private final GoogleIdentityVerifier googleIdentityVerifier;
     private final GoogleProperties googleProperties;
+    private final ConsentService consentService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
@@ -72,6 +74,7 @@ public class AuthService {
                 .isActive(true)
                 .build();
         userRepository.save(user);
+        consentService.recordSignUp(user, request.getConsents());
         return issueTokens(user);
     }
 
@@ -110,8 +113,12 @@ public class AuthService {
         if (!user.isActive()) {
             throw new UnauthorizedException("Account is inactive");
         }
+        boolean created = user.getId() == null;
         user.setAppleUserId(identity.subject());
         userRepository.save(user);
+        if (created) {
+            consentService.recordSignUp(user, request.getConsents());
+        }
         return issueTokens(user);
     }
 
@@ -160,8 +167,12 @@ public class AuthService {
         if (!user.isActive()) {
             throw new UnauthorizedException("Account is inactive");
         }
+        boolean created = user.getId() == null;
         user.setGoogleUserId(identity.subject());
         userRepository.save(user);
+        if (created) {
+            consentService.recordSignUp(user, request.getConsents());
+        }
         return issueTokens(user);
     }
 

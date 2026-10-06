@@ -1,6 +1,7 @@
 package com.randevupazaryeri.auth.security;
 
 import com.randevupazaryeri.common.security.UserPrincipal;
+import com.randevupazaryeri.user.entity.User;
 import com.randevupazaryeri.user.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -36,7 +37,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             if (jwtService.isValid(token) && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UUID userId = jwtService.getUserId(token);
-                userRepository.findById(userId).ifPresent(user -> {
+                userRepository.findById(userId).filter(User::isActive).ifPresent(user -> {
                     UserPrincipal principal = UserPrincipal.from(user);
                     UsernamePasswordAuthenticationToken auth =
                             new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());

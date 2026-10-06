@@ -1,6 +1,7 @@
 package com.randevupazaryeri.auth.controller;
 
 import com.randevupazaryeri.auth.dto.*;
+import com.randevupazaryeri.auth.service.AccountDeletionService;
 import com.randevupazaryeri.auth.service.AuthService;
 import com.randevupazaryeri.common.dto.ApiResponse;
 import com.randevupazaryeri.user.dto.UserResponse;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final AccountDeletionService accountDeletionService;
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
@@ -96,6 +98,14 @@ public class AuthController {
     @Operation(summary = "Update current authenticated user")
     public ApiResponse<UserResponse> updateMe(@Valid @RequestBody UpdateProfileRequest request) {
         return ApiResponse.ok(authService.updateProfile(request));
+    }
+
+    @PostMapping("/me/delete")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Permanently delete my account (password required when one is set)")
+    public ApiResponse<Void> deleteMe(@Valid @RequestBody(required = false) DeleteAccountRequest request) {
+        accountDeletionService.deleteCurrentAccount(request);
+        return ApiResponse.empty();
     }
 
     @PutMapping("/me/password")

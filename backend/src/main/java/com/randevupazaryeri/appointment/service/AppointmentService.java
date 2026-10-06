@@ -205,6 +205,21 @@ public class AppointmentService {
         return AppointmentMapper.toResponse(appointment);
     }
 
+    /**
+     * Account deletion: cancels the customer's open appointments regardless of the cancellation window
+     * and tells the business side. Runs before the account is anonymised so notifications carry the name.
+     */
+    @Transactional
+    public void cancelOpenForDeletedCustomer(UUID customerId) {
+        List<Appointment> open = appointmentRepository.findOpenByCustomerId(customerId,
+                List.of(AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED), Instant.now());
+        for (Appointment appointment : open) {
+            appointment.setStatus(AppointmentStatus.CANCELLED);
+            appointment.setCancellationReason("Müşteri hesabını sildi");
+            notifyBusinessSide(appointment, "APPOINTMENT_CANCELLED", "Randevu iptal edildi");
+        }
+    }
+
     @Transactional
     public AppointmentResponse confirm(UUID businessId, UUID id) {
         Appointment appointment = getAccessible(id, businessId);

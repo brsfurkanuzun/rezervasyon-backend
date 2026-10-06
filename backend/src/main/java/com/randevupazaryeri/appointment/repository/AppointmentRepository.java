@@ -27,6 +27,14 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
                                            @Param("statuses") List<AppointmentStatus> statuses,
                                            @Param("now") Instant now);
 
+    @Query("""
+        select a from Appointment a
+        where a.customer.id = :customerId and a.status in :statuses and a.endDateTime > :now
+        """)
+    List<Appointment> findOpenByCustomerId(@Param("customerId") UUID customerId,
+                                           @Param("statuses") List<AppointmentStatus> statuses,
+                                           @Param("now") Instant now);
+
     @Modifying
     @Query("delete from Appointment a where a.business.id = :businessId")
     int deleteByBusinessId(@Param("businessId") UUID businessId);
