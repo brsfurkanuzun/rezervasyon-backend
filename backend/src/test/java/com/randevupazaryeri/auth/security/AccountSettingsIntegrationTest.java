@@ -146,21 +146,18 @@ class AccountSettingsIntegrationTest {
     }
 
     @Test
-    void profileUpdateRejectsAnotherAccountsEmailOrPhone() throws Exception {
+    void profileUpdateAllowsASharedPhoneButNotAnotherAccountsEmail() throws Exception {
         String other = register(GOOGLE_USER).path("accessToken").asText();
         updateProfile(other, GOOGLE_USER, "+905550001122").andExpect(status().isOk());
         String access = register(PASSWORD_USER).path("accessToken").asText();
 
         updateProfile(access, PASSWORD_USER, "+905550001122")
-                .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.message").value("Phone number already registered"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.firstName").value("Yeni"))
+                .andExpect(jsonPath("$.data.phone").value("+905550001122"));
         updateProfile(access, GOOGLE_USER, null)
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.message").value("Email already registered"));
-        updateProfile(access, PASSWORD_USER, "+905550003344").andExpect(status().isOk());
-        updateProfile(access, PASSWORD_USER, "+905550003344")
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.phone").value("+905550003344"));
     }
 
     private ResultActions updateProfile(String access, String email, String phone) throws Exception {
