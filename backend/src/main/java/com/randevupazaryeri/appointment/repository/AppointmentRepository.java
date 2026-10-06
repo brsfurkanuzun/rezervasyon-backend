@@ -17,7 +17,27 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
 
     Page<Appointment> findByCustomerIdOrderByStartDateTimeDesc(UUID customerId, Pageable pageable);
 
-    Page<Appointment> findByBusinessIdOrderByStartDateTimeDesc(UUID businessId, Pageable pageable);
+    @Query("""
+        select a from Appointment a
+        where a.business.id = :businessId and a.startDateTime >= :from and a.startDateTime < :to
+        order by a.startDateTime desc
+        """)
+    Page<Appointment> findForBusiness(@Param("businessId") UUID businessId,
+                                      @Param("from") Instant from,
+                                      @Param("to") Instant to,
+                                      Pageable pageable);
+
+    @Query("""
+        select a from Appointment a
+        where a.business.id = :businessId and a.employee.id = :employeeId
+          and a.startDateTime >= :from and a.startDateTime < :to
+        order by a.startDateTime desc
+        """)
+    Page<Appointment> findForEmployee(@Param("businessId") UUID businessId,
+                                      @Param("employeeId") UUID employeeId,
+                                      @Param("from") Instant from,
+                                      @Param("to") Instant to,
+                                      Pageable pageable);
 
     @Query("""
         select a from Appointment a join fetch a.customer
@@ -38,8 +58,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
     @Modifying
     @Query("delete from Appointment a where a.business.id = :businessId")
     int deleteByBusinessId(@Param("businessId") UUID businessId);
-
-    Page<Appointment> findByBusinessIdAndEmployeeIdOrderByStartDateTimeDesc(UUID businessId, UUID employeeId, Pageable pageable);
 
     @Query("""
         select a from Appointment a

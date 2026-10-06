@@ -15,6 +15,21 @@ public class AppleProperties {
     /** Services ID used by the websites. Public by design; web Apple sign-in is disabled while empty. */
     private String webServiceId;
 
+    /** Apple Developer team id; signs the client secret used to revoke tokens. */
+    private String teamId;
+
+    /** Id of the .p8 key with "Sign in with Apple" enabled. Token revocation is skipped while empty. */
+    private String signInKeyId;
+
+    /** Contents of that .p8 key (PEM or base64, "\n" escapes allowed). Server-side only. */
+    private String signInPrivateKey;
+
+    public boolean canRevokeTokens() {
+        return teamId != null && !teamId.isBlank()
+                && signInKeyId != null && !signInKeyId.isBlank()
+                && signInPrivateKey != null && !signInPrivateKey.isBlank();
+    }
+
     public List<String> allowedAudiences() {
         List<String> allowed = new ArrayList<>(audiences);
         if (webServiceId != null && !webServiceId.isBlank()) {

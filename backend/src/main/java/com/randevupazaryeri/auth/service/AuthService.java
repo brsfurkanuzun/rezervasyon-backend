@@ -340,7 +340,7 @@ public class AuthService {
         return UserMapper.toResponse(userRepository.save(user));
     }
 
-    private AuthResponse issueTokens(User user) {
+    AuthResponse issueTokens(User user) {
         String access = jwtService.createAccessToken(user.getId(), user.getRole());
         String rawRefresh = generateRawRefreshToken();
         RefreshToken refreshToken = RefreshToken.builder()

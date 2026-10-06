@@ -40,6 +40,19 @@ spring:
       write-dates-as-timestamps: false
     default-property-inclusion: non_null
 
+  # Any SMTP provider. Emails are skipped (and logged) while MAIL_HOST is empty.
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
+
 
 server:
   port: ${PORT:${SERVER_PORT:8080}}
@@ -53,6 +66,10 @@ management:
     web:
       exposure:
         include: health,info
+  health:
+    # An unreachable SMTP server must not mark the API as down.
+    mail:
+      enabled: false
 
 
 app:
@@ -78,6 +95,13 @@ app:
 
   apple:
     web-service-id: ${APPLE_WEB_SERVICE_ID:}
+    # Sign in with Apple key (.p8) used to revoke tokens when an account is deleted. Skipped while empty.
+    team-id: ${APPLE_TEAM_ID:${APNS_TEAM_ID:}}
+    sign-in-key-id: ${APPLE_SIGNIN_KEY_ID:}
+    sign-in-private-key: ${APPLE_SIGNIN_PRIVATE_KEY:}
+
+  mail:
+    from: ${MAIL_FROM:}
 
   google:
     web-client-id: ${GOOGLE_WEB_CLIENT_ID:}

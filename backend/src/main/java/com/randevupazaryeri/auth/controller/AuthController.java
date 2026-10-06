@@ -3,6 +3,7 @@ package com.randevupazaryeri.auth.controller;
 import com.randevupazaryeri.auth.dto.*;
 import com.randevupazaryeri.auth.service.AccountDeletionService;
 import com.randevupazaryeri.auth.service.AuthService;
+import com.randevupazaryeri.auth.service.PasswordResetService;
 import com.randevupazaryeri.common.dto.ApiResponse;
 import com.randevupazaryeri.user.dto.UserResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,6 +22,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final AccountDeletionService accountDeletionService;
+    private final PasswordResetService passwordResetService;
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
@@ -63,6 +65,19 @@ public class AuthController {
     @Operation(summary = "Check whether an email is already registered")
     public ApiResponse<EmailLookupResponse> checkEmail(@Valid @RequestBody EmailLookupRequest request) {
         return ApiResponse.ok(authService.lookupEmail(request));
+    }
+
+    @PostMapping("/password/forgot")
+    @Operation(summary = "Email a password reset code; the response is the same whether or not the email exists")
+    public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        passwordResetService.requestCode(request);
+        return ApiResponse.empty();
+    }
+
+    @PostMapping("/password/reset")
+    @Operation(summary = "Set a new password with the emailed code; signs out other sessions and signs in")
+    public ApiResponse<AuthResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        return ApiResponse.ok(passwordResetService.reset(request));
     }
 
     @PostMapping("/refresh")

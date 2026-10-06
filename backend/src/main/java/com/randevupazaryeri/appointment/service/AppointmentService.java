@@ -46,6 +46,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AppointmentService {
+    private static final Instant RANGE_MIN = Instant.parse("1970-01-01T00:00:00Z");
+    private static final Instant RANGE_MAX = Instant.parse("9999-12-31T00:00:00Z");
     private static final DateTimeFormatter NOTIFICATION_TIME_FORMAT =
             DateTimeFormatter.ofPattern("d MMMM EEEE, HH:mm", Locale.forLanguageTag("tr-TR"));
 
@@ -148,14 +150,32 @@ public class AppointmentService {
                 .map(AppointmentMapper::toResponse);
     }
 
+    /** Newest first. {@code from} (inclusive) and {@code to} (exclusive) bound the start time when given. */
     @Transactional(readOnly = true)
-    public Page<AppointmentResponse> businessAppointments(UUID businessId, Pageable pageable) {
+    public Page<AppointmentResponse> businessAppointments(UUID businessId, Instant from, Instant to, Pageable pageable) {
         var access = ownershipService.requireMember(businessId);
+        Instant start = from != null ? from : RANGE_MIN;
+        Instant end = to != null ? to : RANGE_MAX;
         Page<Appointment> page = access.isOwner()
-                ? appointmentRepository.findByBusinessIdOrderByStartDateTimeDesc(businessId, pageable)
-                : appointmentRepository.findByBusinessIdAndEmployeeIdOrderByStartDateTimeDesc(
-                        businessId, access.staff().getId(), pageable);
+                ? appointmentRepository.findForBusiness(businessId, start, end, pageable)
+                : appointmentRepository.findForEmployee(businessId, access.staff().getId(), start, end, pageable);
         return page.map(AppointmentMapper::toResponse);
+    }
+
+    /** For the customer, the business owner, the assigned expert or an admin (e.g. opening a notification). */
+    @Transactional(readOnly = true)
+    public AppointmentResponse getForViewer(UUID id) {
+        Appointment appointment = getAppointment(id);
+        var principal = SecurityUtils.currentPrincipal();
+        User staffUser = appointment.getEmployee().getUser();
+        boolean allowed = appointment.getCustomer().getId().equals(principal.getId())
+                || appointment.getBusiness().getOwner().getId().equals(principal.getId())
+                || (staffUser != null && staffUser.getId().equals(principal.getId()))
+                || principal.getRole() == Role.ADMIN;
+        if (!allowed) {
+            throw new ForbiddenException("Not allowed to view this appointment");
+        }
+        return AppointmentMapper.toResponse(appointment);
     }
 
     @Transactional

@@ -2,6 +2,7 @@ package com.randevupazaryeri.auth.service;
 
 import com.randevupazaryeri.appointment.service.AppointmentService;
 import com.randevupazaryeri.auth.dto.DeleteAccountRequest;
+import com.randevupazaryeri.auth.security.AppleTokenRevoker;
 import com.randevupazaryeri.business.repository.BusinessRepository;
 import com.randevupazaryeri.common.exception.BusinessRuleException;
 import com.randevupazaryeri.common.security.SecurityUtils;
@@ -44,6 +45,7 @@ public class AccountDeletionService {
     private final EmployeeRepository employeeRepository;
     private final AppointmentService appointmentService;
     private final ImageService imageService;
+    private final AppleTokenRevoker appleTokenRevoker;
     private final PasswordEncoder passwordEncoder;
     private final TransactionTemplate transactionTemplate;
     private final EntityManager entityManager;
@@ -67,6 +69,7 @@ public class AccountDeletionService {
         imageService.deleteAllForUser(userId);
 
         String accountPhoto = user.getPhotoUrl();
+        String appleUserId = user.getAppleUserId();
         transactionTemplate.executeWithoutResult(status -> {
             appointmentService.cancelOpenForDeletedCustomer(userId);
             for (Employee employee : employeeRepository.findByUserId(userId)) {
@@ -83,6 +86,7 @@ public class AccountDeletionService {
             jdbc.update("DELETE FROM favorites WHERE customer_id = ?", userId);
             jdbc.update("DELETE FROM notifications WHERE user_id = ?", userId);
             jdbc.update("DELETE FROM user_consents WHERE user_id = ?", userId);
+            jdbc.update("DELETE FROM password_reset_codes WHERE user_id = ?", userId);
             jdbc.update("UPDATE appointments SET customer_note = NULL WHERE customer_id = ?", userId);
             jdbc.update("""
                     UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = NULL, photo_url = NULL,
@@ -96,6 +100,10 @@ public class AccountDeletionService {
                     Timestamp.from(Instant.now()), userId);
         });
         log.info("Account deleted userId={}", userId);
+
+        if (appleUserId != null && request != null) {
+            appleTokenRevoker.revoke(request.getAppleAuthorizationCode(), request.getAppleClientId(), appleUserId);
+        }
     }
 
     private String randomSecret() {
