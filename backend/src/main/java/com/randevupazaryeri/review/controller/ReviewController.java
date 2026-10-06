@@ -2,7 +2,9 @@ package com.randevupazaryeri.review.controller;
 
 import com.randevupazaryeri.common.dto.ApiResponse;
 import com.randevupazaryeri.review.dto.CreateReviewRequest;
+import com.randevupazaryeri.review.dto.ReportReviewRequest;
 import com.randevupazaryeri.review.dto.ReviewResponse;
+import com.randevupazaryeri.review.service.ReviewModerationService;
 import com.randevupazaryeri.review.service.ReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -24,6 +26,7 @@ import java.util.UUID;
 @Tag(name = "Reviews")
 public class ReviewController {
     private final ReviewService reviewService;
+    private final ReviewModerationService reviewModerationService;
 
     @PostMapping("/api/v1/reviews")
     @ResponseStatus(HttpStatus.CREATED)
@@ -32,6 +35,25 @@ public class ReviewController {
     @Operation(summary = "Create review for completed appointment")
     public ApiResponse<ReviewResponse> create(@Valid @RequestBody CreateReviewRequest request) {
         return ApiResponse.ok(reviewService.create(request));
+    }
+
+    @PostMapping("/api/v1/reviews/{reviewId}/report")
+    @PreAuthorize("isAuthenticated()")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Report a review and hide it for the reporter")
+    public ApiResponse<Void> report(@PathVariable UUID reviewId,
+                                    @Valid @RequestBody(required = false) ReportReviewRequest request) {
+        reviewModerationService.report(reviewId, request == null ? null : request.getReason());
+        return ApiResponse.empty();
+    }
+
+    @PostMapping("/api/v1/reviews/{reviewId}/block-author")
+    @PreAuthorize("isAuthenticated()")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Block a review's author and hide their reviews for the caller")
+    public ApiResponse<Void> blockAuthor(@PathVariable UUID reviewId) {
+        reviewModerationService.blockAuthor(reviewId);
+        return ApiResponse.empty();
     }
 
     @GetMapping("/api/v1/businesses/{businessId}/reviews")

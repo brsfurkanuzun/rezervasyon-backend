@@ -104,6 +104,10 @@ app:
     from: ${MAIL_FROM:}
     resend-api-key: ${RESEND_API_KEY:}
 
+  moderation:
+    # Inbox that receives reported reviews. Reports are still stored and hidden while empty.
+    report-email: ${MODERATION_EMAIL:}
+
   password-reset:
     customer-url: ${PASSWORD_RESET_CUSTOMER_URL:https://www.resplz.com/tr/reset-password}
     partner-url: ${PASSWORD_RESET_PARTNER_URL:https://partner.resplz.com/tr/reset-password}

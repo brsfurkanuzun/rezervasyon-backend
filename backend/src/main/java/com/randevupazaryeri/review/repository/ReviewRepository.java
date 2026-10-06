@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -16,8 +17,19 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
     boolean existsByCustomerIdAndBusinessId(UUID customerId, UUID businessId);
     long countByBusinessId(UUID businessId);
     List<Review> findTop5ByBusinessIdOrderByCreatedAtDesc(UUID businessId);
-    List<Review> findTop20ByBusinessIdOrderByCreatedAtDesc(UUID businessId);
     Page<Review> findByBusinessIdOrderByCreatedAtDesc(UUID businessId, Pageable pageable);
+
+    @Query("""
+            select r from Review r
+            where r.business.id = :businessId
+              and r.id not in :hiddenReviewIds
+              and r.customer.id not in :blockedAuthorIds
+            order by r.createdAt desc
+            """)
+    Page<Review> findVisibleByBusinessId(@Param("businessId") UUID businessId,
+                                         @Param("hiddenReviewIds") Collection<UUID> hiddenReviewIds,
+                                         @Param("blockedAuthorIds") Collection<UUID> blockedAuthorIds,
+                                         Pageable pageable);
 
     @Query("select avg(r.rating) from Review r where r.business.id = :businessId")
     Double averageRatingByBusinessId(@Param("businessId") UUID businessId);

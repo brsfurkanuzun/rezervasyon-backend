@@ -20,6 +20,7 @@ import com.randevupazaryeri.employee.repository.WorkingHourRepository;
 import com.randevupazaryeri.review.dto.ReviewResponse;
 import com.randevupazaryeri.review.mapper.ReviewMapper;
 import com.randevupazaryeri.review.repository.ReviewRepository;
+import com.randevupazaryeri.review.service.ReviewModerationService;
 import com.randevupazaryeri.serviceoffer.dto.ServiceResponse;
 import com.randevupazaryeri.serviceoffer.mapper.ServiceMapper;
 import com.randevupazaryeri.serviceoffer.repository.ServiceOfferRepository;
@@ -58,6 +59,7 @@ public class BusinessService {
     private final ServiceOfferRepository serviceOfferRepository;
     private final EmployeeRepository employeeRepository;
     private final ReviewRepository reviewRepository;
+    private final ReviewModerationService reviewModerationService;
     private final WorkingHourRepository workingHourRepository;
 
     @Transactional
@@ -132,7 +134,7 @@ public class BusinessService {
                     return er;
                 })
                 .toList();
-        List<ReviewResponse> reviews = reviewRepository.findTop20ByBusinessIdOrderByCreatedAtDesc(business.getId())
+        List<ReviewResponse> reviews = reviewModerationService.visibleReviews(business.getId(), PageRequest.of(0, 20))
                 .stream().map(ReviewMapper::toResponse).toList();
         List<OpeningHourResponse> openingHours = openingHours(business.getId());
         return BusinessDetailResponse.builder()

@@ -27,6 +27,7 @@ public class ReviewService {
     private final ReviewRepository reviewRepository;
     private final AppointmentRepository appointmentRepository;
     private final EmployeeRepository employeeRepository;
+    private final ReviewModerationService reviewModerationService;
 
     @Transactional
     public ReviewResponse create(CreateReviewRequest request) {
@@ -60,6 +61,6 @@ public class ReviewService {
 
     @Transactional(readOnly = true)
     public Page<ReviewResponse> listByBusiness(UUID businessId, Pageable pageable) {
-        return reviewRepository.findByBusinessIdOrderByCreatedAtDesc(businessId, pageable).map(ReviewMapper::toResponse);
+        return reviewModerationService.visibleReviews(businessId, pageable).map(ReviewMapper::toResponse);
     }
 }

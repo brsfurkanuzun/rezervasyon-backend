@@ -87,6 +87,8 @@ public class AccountDeletionService {
             jdbc.update("DELETE FROM notifications WHERE user_id = ?", userId);
             jdbc.update("DELETE FROM user_consents WHERE user_id = ?", userId);
             jdbc.update("DELETE FROM password_reset_tokens WHERE user_id = ?", userId);
+            jdbc.update("DELETE FROM review_reports WHERE reporter_id = ?", userId);
+            jdbc.update("DELETE FROM user_blocks WHERE blocker_id = ?", userId);
             jdbc.update("UPDATE appointments SET customer_note = NULL WHERE customer_id = ?", userId);
             jdbc.update("""
                     UPDATE users SET first_name = ?, last_name = ?, email = ?, phone = NULL, photo_url = NULL,
