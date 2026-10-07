@@ -13,10 +13,15 @@ import com.randevupazaryeri.user.entity.Role;
 import com.randevupazaryeri.user.entity.User;
 import com.randevupazaryeri.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.HtmlUtils;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -40,6 +45,7 @@ public class PasswordResetService {
     static final Duration RESEND_COOLDOWN = Duration.ofSeconds(60);
     static final int MAX_LINKS_PER_HOUR = 5;
     static final String INVALID_LINK = "Invalid or expired reset link";
+    private static final String HTML_TEMPLATE = loadTemplate();
 
     private final UserRepository userRepository;
     private final PasswordResetTokenRepository tokenRepository;
@@ -78,7 +84,8 @@ public class PasswordResetService {
                 .createdAt(now)
                 .build());
         String page = user.getRole() == Role.PROVIDER ? properties.getPartnerUrl() : properties.getCustomerUrl();
-        emailService.send(user.getEmail(), "resplz şifre sıfırlama bağlantın", emailBody(user, page + "#token=" + token));
+        String link = page + "#token=" + token;
+        emailService.send(user.getEmail(), "ResPlz | Şifrenizi sıfırlayın", emailText(user, link), emailHtml(link));
     }
 
     @Transactional
@@ -112,17 +119,29 @@ public class PasswordResetService {
         }
     }
 
-    private String emailBody(User user, String link) {
+    private String emailText(User user, String link) {
         return """
                 Merhaba %s,
 
-                resplz hesabının şifresini sıfırlamak için bu bağlantıyı aç:
+                ResPlz hesabınıza yeniden erişmek için bu bağlantıyla yeni bir şifre oluşturun:
 
                 %s
 
-                Bağlantı 30 dakika geçerli ve yalnızca bir kez kullanılabilir. Bu isteği sen yapmadıysan bu e-postayı dikkate alma; şifren değişmez.
+                Bu bağlantı 30 dakika boyunca geçerlidir ve yalnızca bir kez kullanılabilir. Bu isteği siz yapmadıysanız bu e-postayı yok sayabilirsiniz; şifreniz değişmez.
 
-                resplz
+                ResPlz
                 """.formatted(user.getFirstName(), link);
+    }
+
+    private static String emailHtml(String link) {
+        return HTML_TEMPLATE.replace("{{RESET_URL}}", HtmlUtils.htmlEscape(link));
+    }
+
+    private static String loadTemplate() {
+        try (InputStream in = new ClassPathResource("mail/password-reset.html").getInputStream()) {
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 }

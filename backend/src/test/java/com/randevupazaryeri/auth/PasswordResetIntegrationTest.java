@@ -111,14 +111,14 @@ class PasswordResetIntegrationTest {
     @Test
     void doesNotRevealUnknownEmails() throws Exception {
         post("/api/v1/auth/password/forgot", "{\"email\":\"nobody-here@test.com\"}").andExpect(status().isOk());
-        verify(emailService, never()).send(anyString(), anyString(), anyString());
+        verify(emailService, never()).send(anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
     void waitsBeforeSendingAnotherLink() throws Exception {
         post("/api/v1/auth/password/forgot", "{\"email\":\"%s\"}".formatted(EMAIL)).andExpect(status().isOk());
         post("/api/v1/auth/password/forgot", "{\"email\":\"%s\"}".formatted(EMAIL)).andExpect(status().isOk());
-        verify(emailService, times(1)).send(eq(EMAIL), anyString(), anyString());
+        verify(emailService, times(1)).send(eq(EMAIL), anyString(), anyString(), anyString());
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM password_reset_tokens", Integer.class)).isEqualTo(1);
     }
 
@@ -129,8 +129,11 @@ class PasswordResetIntegrationTest {
 
     private String sentLink(String email) {
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(emailService).send(eq(email), anyString(), text.capture());
-        return text.getValue().lines().map(String::trim).filter(line -> line.startsWith("https://")).findFirst().orElseThrow();
+        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
+        verify(emailService).send(eq(email), anyString(), text.capture(), html.capture());
+        String link = text.getValue().lines().map(String::trim).filter(line -> line.startsWith("https://")).findFirst().orElseThrow();
+        assertThat(html.getValue()).contains("href=\"" + link + "\"").doesNotContain("{{RESET_URL}}");
+        return link;
     }
 
     private String body(String token, String password) {

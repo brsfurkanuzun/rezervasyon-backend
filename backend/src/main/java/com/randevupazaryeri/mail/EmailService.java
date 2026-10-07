@@ -3,6 +3,8 @@ package com.randevupazaryeri.mail;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.randevupazaryeri.config.EmailProperties;
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -10,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -19,11 +22,12 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Sends plain-text transactional email through Resend's HTTPS API, or over SMTP when no Resend key is set.
+ * Sends transactional email (plain text, optionally with an HTML version) through Resend's HTTPS API, or over SMTP when no Resend key is set.
  * Runs off the request thread so response time does not reveal whether an address exists. Recipients,
  * bodies and keys are never logged.
  */
@@ -52,24 +56,38 @@ public class EmailService {
 
     @Async
     public void send(String to, String subject, String text) {
+        deliver(to, subject, text, null);
+    }
+
+    /** Sends an HTML email; {@code text} is the plain-text alternative for clients that do not render HTML. */
+    @Async
+    public void send(String to, String subject, String text, String html) {
+        deliver(to, subject, text, html);
+    }
+
+    private void deliver(String to, String subject, String text, String html) {
         if (!isConfigured()) {
             log.warn("Email skipped: set MAIL_FROM and either RESEND_API_KEY or MAIL_HOST");
             return;
         }
         if (properties.usesResend()) {
-            sendWithResend(to, subject, text);
+            sendWithResend(to, subject, text, html);
         } else {
-            sendWithSmtp(to, subject, text);
+            sendWithSmtp(to, subject, text, html);
         }
     }
 
-    private void sendWithResend(String to, String subject, String text) {
+    private void sendWithResend(String to, String subject, String text, String html) {
         try {
-            String body = objectMapper.writeValueAsString(Map.of(
-                    "from", properties.getFrom().trim(),
-                    "to", List.of(to),
-                    "subject", subject,
-                    "text", text));
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("from", properties.getFrom().trim());
+            payload.put("to", List.of(to));
+            payload.put("subject", subject);
+            payload.put("text", text);
+            if (html != null) {
+                payload.put("html", html);
+            }
+            String body = objectMapper.writeValueAsString(payload);
             HttpRequest request = HttpRequest.newBuilder(RESEND_EMAILS)
                     .timeout(Duration.ofSeconds(15))
                     .header("Authorization", "Bearer " + properties.getResendApiKey().trim())
@@ -87,15 +105,26 @@ public class EmailService {
         }
     }
 
-    private void sendWithSmtp(String to, String subject, String text) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(properties.getFrom().trim());
-        message.setTo(to);
-        message.setSubject(subject);
-        message.setText(text);
+    private void sendWithSmtp(String to, String subject, String text, String html) {
+        JavaMailSender sender = mailSender.getObject();
         try {
-            mailSender.getObject().send(message);
-        } catch (MailException ex) {
+            if (html == null) {
+                SimpleMailMessage message = new SimpleMailMessage();
+                message.setFrom(properties.getFrom().trim());
+                message.setTo(to);
+                message.setSubject(subject);
+                message.setText(text);
+                sender.send(message);
+                return;
+            }
+            MimeMessage message = sender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(properties.getFrom().trim());
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(text, html);
+            sender.send(message);
+        } catch (MailException | MessagingException ex) {
             log.warn("Email delivery failed: {}", ex.getClass().getSimpleName());
         }
     }
