@@ -35,6 +35,7 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -55,6 +56,11 @@ public class AuthService {
     private final GoogleProperties googleProperties;
     private final ConsentService consentService;
     private final SecureRandom secureRandom = new SecureRandom();
+
+    /** Name given to social sign-ups when the provider sends none; older Apple accounts used "rezplz". */
+    private static final String PLACEHOLDER_FIRST_NAME = "ResPlz";
+    private static final Set<String> PLACEHOLDER_FIRST_NAMES = Set.of(PLACEHOLDER_FIRST_NAME, "rezplz");
+    private static final String PLACEHOLDER_LAST_NAME = "Kullanıcısı";
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -115,6 +121,7 @@ public class AuthService {
         }
         boolean created = user.getId() == null;
         user.setAppleUserId(identity.subject());
+        fillPlaceholderName(user, request.getFirstName(), request.getLastName());
         userRepository.save(user);
         if (created) {
             consentService.recordSignUp(user, request.getConsents());
@@ -126,11 +133,11 @@ public class AuthService {
         String email = identity.email() != null
                 ? identity.email().trim().toLowerCase()
                 : identity.subject().replaceAll("[^A-Za-z0-9]", "").toLowerCase() + "@appleid.rezplz.app";
-        String firstName = blankToNull(request.getFirstName());
-        String lastName = blankToNull(request.getLastName());
+        String firstName = truncate(blankToNull(request.getFirstName()), 100);
+        String lastName = truncate(blankToNull(request.getLastName()), 100);
         return User.builder()
-                .firstName(firstName != null ? firstName : "rezplz")
-                .lastName(lastName != null ? lastName : "Kullanıcısı")
+                .firstName(firstName != null ? firstName : PLACEHOLDER_FIRST_NAME)
+                .lastName(lastName != null ? lastName : PLACEHOLDER_LAST_NAME)
                 .email(email)
                 .passwordHash(passwordEncoder.encode(generateRawRefreshToken()))
                 .passwordSet(false)
@@ -169,6 +176,7 @@ public class AuthService {
         }
         boolean created = user.getId() == null;
         user.setGoogleUserId(identity.subject());
+        fillPlaceholderName(user, identity.firstName(), identity.lastName());
         userRepository.save(user);
         if (created) {
             consentService.recordSignUp(user, request.getConsents());
@@ -194,8 +202,8 @@ public class AuthService {
         String firstName = truncate(blankToNull(identity.firstName()), 100);
         String lastName = truncate(blankToNull(identity.lastName()), 100);
         return User.builder()
-                .firstName(firstName != null ? firstName : "ResPlz")
-                .lastName(lastName != null ? lastName : "Kullanıcısı")
+                .firstName(firstName != null ? firstName : PLACEHOLDER_FIRST_NAME)
+                .lastName(lastName != null ? lastName : PLACEHOLDER_LAST_NAME)
                 .email(email)
                 .passwordHash(passwordEncoder.encode(generateRawRefreshToken()))
                 .passwordSet(false)
@@ -376,6 +384,22 @@ public class AuthService {
         } catch (Exception e) {
             throw new IllegalStateException("Unable to hash refresh token", e);
         }
+    }
+
+    /**
+     * Apple sends the name only on the first authorization, so an account can end up with the
+     * placeholder. Replaces it once a provider sends a real name; names the user set are kept.
+     */
+    private void fillPlaceholderName(User user, String firstName, String lastName) {
+        boolean placeholder = PLACEHOLDER_LAST_NAME.equals(user.getLastName())
+                && PLACEHOLDER_FIRST_NAMES.contains(user.getFirstName());
+        String first = truncate(blankToNull(firstName), 100);
+        if (!placeholder || first == null) {
+            return;
+        }
+        String last = truncate(blankToNull(lastName), 100);
+        user.setFirstName(first);
+        user.setLastName(last != null ? last : PLACEHOLDER_LAST_NAME);
     }
 
     private String truncate(String value, int max) {

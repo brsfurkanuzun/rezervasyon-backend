@@ -72,6 +72,21 @@ class AppleSignInIntegrationTest {
     }
 
     @Test
+    void fillsInThePlaceholderNameWhenAppleSendsTheNameOnALaterSignIn() throws Exception {
+        JsonNode first = signIn(token("apple-sub-new", "apple-new@test.com", "com.rezplz.rezplz", appleKey), "");
+        assertThat(first.path("user").path("lastName").asText()).isEqualTo("Kullanıcısı");
+
+        JsonNode second = signIn(token("apple-sub-new", null, "com.rezplz.rezplz", appleKey),
+                "\"firstName\":\"Ayşe\",\"lastName\":\"Yılmaz\",");
+        assertThat(second.path("user").path("firstName").asText()).isEqualTo("Ayşe");
+        assertThat(second.path("user").path("lastName").asText()).isEqualTo("Yılmaz");
+
+        JsonNode third = signIn(token("apple-sub-new", null, "com.rezplz.rezplz", appleKey),
+                "\"firstName\":\"Başka\",\"lastName\":\"İsim\",");
+        assertThat(third.path("user").path("firstName").asText()).isEqualTo("Ayşe");
+    }
+
+    @Test
     void exposesTheWebServiceIdAndAcceptsTokensIssuedForIt() throws Exception {
         mockMvc.perform(get("/api/v1/auth/apple/config"))
                 .andExpect(status().isOk())

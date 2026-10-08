@@ -79,6 +79,38 @@ class GoogleSignInIntegrationTest {
     }
 
     @Test
+    void fillsInThePlaceholderNameOfAnExistingAccount() throws Exception {
+        signIn(token("google-sub-new", "google.new@gmail.com", null, CLIENT_ID, googleKey), "");
+        jdbc.update("UPDATE users SET first_name = 'rezplz', last_name = 'Kullanıcısı' WHERE email = ?",
+                "google.new@gmail.com");
+
+        JsonNode data = signIn(token("google-sub-new", "google.new@gmail.com", null, CLIENT_ID, googleKey), "");
+        assertThat(data.path("user").path("firstName").asText()).isEqualTo("Ayşe");
+        assertThat(data.path("user").path("lastName").asText()).isEqualTo("Yılmaz");
+    }
+
+    @Test
+    void usesTheFullNameClaimWhenGivenAndFamilyNameAreMissing() throws Exception {
+        Instant now = Instant.now();
+        String idToken = Jwts.builder()
+                .header().keyId("test-kid").and()
+                .issuer("https://accounts.google.com")
+                .audience().add(CLIENT_ID).and()
+                .subject("google-sub-new")
+                .claim("email", "google.new@gmail.com")
+                .claim("email_verified", true)
+                .claim("name", "Ayşe Nur Yılmaz")
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(600)))
+                .signWith(googleKey, Jwts.SIG.RS256)
+                .compact();
+
+        JsonNode data = signIn(idToken, "");
+        assertThat(data.path("user").path("firstName").asText()).isEqualTo("Ayşe Nur");
+        assertThat(data.path("user").path("lastName").asText()).isEqualTo("Yılmaz");
+    }
+
+    @Test
     void linksExistingPasswordAccountWhenGoogleOwnsTheEmail() throws Exception {
         register("google.link@gmail.com");
 
