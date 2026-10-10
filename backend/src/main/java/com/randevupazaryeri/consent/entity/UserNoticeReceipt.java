@@ -9,9 +9,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "user_consents")
+@Table(name = "user_notice_receipts")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-public class UserConsent {
+public class UserNoticeReceipt {
     @Id @GeneratedValue @UuidGenerator
     private UUID id;
 
@@ -20,24 +20,22 @@ public class UserConsent {
     private User user;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "consent_type", nullable = false, length = 32)
-    private ConsentType consentType;
+    @Column(name = "notice_type", nullable = false, length = 32)
+    private NoticeType noticeType;
 
-    @Column(nullable = false)
-    private boolean granted;
-
-    /** Where the decision was made, e.g. IOS_CUSTOMER or WEB_PARTNER. */
-    @Column(length = 32)
-    private String channel;
-
-    @Column(name = "document_version", length = 64)
+    @Column(name = "document_version", nullable = false, length = 64)
     private String documentVersion;
 
-    @Column(name = "created_at", nullable = false)
-    private Instant createdAt;
+    @Column(nullable = false, length = 32)
+    private String channel;
+
+    @Column(name = "presented_at", nullable = false)
+    private Instant presentedAt;
 
     @PrePersist
     void onCreate() {
-        createdAt = Instant.now();
+        if (presentedAt == null) {
+            presentedAt = Instant.now();
+        }
     }
 }
