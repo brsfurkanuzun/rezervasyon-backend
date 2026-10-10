@@ -206,10 +206,16 @@ class AccountDeletionIntegrationTest {
     }
 
     @Test
-    void ownerHasToDeleteTheBusinessFirst() throws Exception {
-        json(post("/api/v1/auth/me/delete"), owner, "{\"password\":\"Password123!\"}")
+    void deletingAnOwnerAccountDeletesTheirBusiness() throws Exception {
+        UUID ownerId = userId(EMAILS[0]);
+        json(post("/api/v1/auth/me/delete"), owner, "{\"password\":\"wrong-password\"}")
                 .andExpect(status().isUnprocessableEntity());
-        assertThat(count("SELECT COUNT(*) FROM users WHERE id = ? AND is_active", userId(EMAILS[0]))).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM businesses WHERE id = ?::uuid", businessId)).isEqualTo(1);
+
+        json(post("/api/v1/auth/me/delete"), owner, "{\"password\":\"Password123!\"}").andExpect(status().isOk());
+        assertThat(count("SELECT COUNT(*) FROM businesses WHERE id = ?::uuid", businessId)).isZero();
+        assertThat(count("SELECT COUNT(*) FROM users WHERE id = ? AND is_active", ownerId)).isZero();
+        assertThat(count("SELECT COUNT(*) FROM users WHERE id = ? AND is_active", userId(EMAILS[1]))).isEqualTo(1);
     }
 
     @Test

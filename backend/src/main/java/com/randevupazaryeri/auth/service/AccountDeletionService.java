@@ -3,7 +3,9 @@ package com.randevupazaryeri.auth.service;
 import com.randevupazaryeri.appointment.service.AppointmentService;
 import com.randevupazaryeri.auth.dto.DeleteAccountRequest;
 import com.randevupazaryeri.auth.security.AppleTokenRevoker;
+import com.randevupazaryeri.business.entity.Business;
 import com.randevupazaryeri.business.repository.BusinessRepository;
+import com.randevupazaryeri.business.service.BusinessDeletionService;
 import com.randevupazaryeri.common.exception.BusinessRuleException;
 import com.randevupazaryeri.common.security.SecurityUtils;
 import com.randevupazaryeri.employee.entity.Employee;
@@ -30,7 +32,7 @@ import java.util.UUID;
  * Deletes the signed-in account. Personal data, sessions, addresses, favorites, notifications, device
  * tokens, consents and the avatar are removed. The user row stays anonymised so businesses keep their
  * appointment history and reviews lose the name. Open appointments are cancelled and the business told.
- * Owners must delete their business first.
+ * Businesses the user owns are deleted with everything that belongs to them.
  */
 @Slf4j
 @Service
@@ -42,6 +44,7 @@ public class AccountDeletionService {
 
     private final UserService userService;
     private final BusinessRepository businessRepository;
+    private final BusinessDeletionService businessDeletionService;
     private final EmployeeRepository employeeRepository;
     private final AppointmentService appointmentService;
     private final ImageService imageService;
@@ -61,8 +64,8 @@ public class AccountDeletionService {
                 throw new BusinessRuleException("Current password is incorrect");
             }
         }
-        if (!businessRepository.findByOwnerId(userId).isEmpty()) {
-            throw new BusinessRuleException("Delete your business before deleting your account");
+        for (Business business : businessRepository.findByOwnerId(userId)) {
+            businessDeletionService.delete(business.getId());
         }
 
         // Storage first: if it fails the account is left untouched and the user can retry.

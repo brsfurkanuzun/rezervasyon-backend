@@ -82,13 +82,24 @@ public class GoogleIdentityVerifier {
             throw new UnauthorizedException("Google ID token was issued for another app");
         }
         Object verified = claims.get("email_verified");
+        String firstName = claims.get("given_name", String.class);
+        String lastName = claims.get("family_name", String.class);
+        String fullName = claims.get("name", String.class);
+        if ((firstName == null || firstName.isBlank()) && fullName != null && !fullName.isBlank()) {
+            String name = fullName.trim();
+            int lastSpace = name.lastIndexOf(' ');
+            firstName = lastSpace > 0 ? name.substring(0, lastSpace).trim() : name;
+            if ((lastName == null || lastName.isBlank()) && lastSpace > 0) {
+                lastName = name.substring(lastSpace + 1);
+            }
+        }
         return new GoogleIdentity(
                 claims.getSubject(),
                 claims.get("email", String.class),
                 Boolean.TRUE.equals(verified) || "true".equals(verified),
                 claims.get("hd", String.class),
-                claims.get("given_name", String.class),
-                claims.get("family_name", String.class));
+                firstName,
+                lastName);
     }
 
     /** Test seam: replaces Google's key set without a network call. */
