@@ -105,6 +105,40 @@ class AccountDeletionIntegrationTest {
     }
 
     @Test
+    void recordsNoticeVersionsSeparatelyFromConsents() throws Exception {
+        String registration = register("notice-record@test.com", "CUSTOMER", """
+                {"termsAccepted":true,"termsVersion":"terms-2.1",
+                 "kvkkNoticeVersion":"kvkk-1.3","privacyPolicyVersion":"privacy-1.2",
+                 "marketingConsentVersion":"marketing-1.0",
+                 "marketingConsent":false,"channel":"WEB_CUSTOMER"}
+                """);
+        UUID userId = userId("notice-record@test.com");
+
+        assertThat(jdbc.queryForObject(
+                "SELECT document_version FROM user_consents WHERE user_id = ? AND consent_type = 'TERMS'",
+                String.class, userId)).isEqualTo("terms-2.1");
+        assertThat(jdbc.queryForObject(
+                "SELECT document_version FROM user_consents WHERE user_id = ? AND consent_type = 'MARKETING'",
+                String.class, userId)).isEqualTo("marketing-1.0");
+
+        List<Map<String, Object>> receipts = jdbc.queryForList(
+                "SELECT notice_type, document_version, channel, presented_at FROM user_notice_receipts WHERE user_id = ? ORDER BY notice_type",
+                userId);
+        assertThat(receipts).hasSize(2);
+        assertThat(receipts).extracting(row -> row.get("notice_type"))
+                .containsExactly("KVKK_NOTICE", "PRIVACY_POLICY");
+        assertThat(receipts).extracting(row -> row.get("document_version"))
+                .containsExactly("kvkk-1.3", "privacy-1.2");
+        assertThat(receipts).extracting(row -> row.get("channel")).containsOnly("WEB_CUSTOMER");
+        assertThat(receipts).allSatisfy(row -> assertThat(row.get("presented_at")).isNotNull());
+        assertThat(count("SELECT COUNT(*) FROM user_consents WHERE user_id = ? AND consent_type IN ('KVKK', 'PRIVACY')", userId))
+                .isZero();
+        assertThat(count("SELECT COUNT(*) FROM user_consents WHERE user_id = ? AND consent_type = 'TERMS'", userId))
+                .isEqualTo(1);
+        assertThat(registration).isNotBlank();
+    }
+
+    @Test
     void deletesTheCustomerAndKeepsAnonymousHistory() throws Exception {
         UUID customerId = userId(EMAILS[2]);
         UUID past = insertAppointment(customerId, -2, "COMPLETED");
@@ -135,6 +169,7 @@ class AccountDeletionIntegrationTest {
 
         for (String sql : new String[]{
                 "SELECT COUNT(*) FROM user_consents WHERE user_id = ?",
+                "SELECT COUNT(*) FROM user_notice_receipts WHERE user_id = ?",
                 "SELECT COUNT(*) FROM favorites WHERE customer_id = ?",
                 "SELECT COUNT(*) FROM refresh_tokens WHERE user_id = ?",
                 "SELECT COUNT(*) FROM images WHERE owner_id = ?"}) {
